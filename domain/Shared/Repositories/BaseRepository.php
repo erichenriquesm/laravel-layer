@@ -4,12 +4,12 @@ namespace Domain\Shared\Repositories;
 use Domain\Shared\Contracts\BaseRepositoryContract;
 
 class BaseRepository implements BaseRepositoryContract {
-    protected $modelName;
+    protected $modelClass;
     protected $model;
 
     public function __construct()
     {
-        $this->model = app($this->modelName);
+        $this->model = app("{$this->modelClass}");
     }
 
     public function create(array $data) : array
@@ -17,7 +17,6 @@ class BaseRepository implements BaseRepositoryContract {
         $register = $this->model->create($data);
         return $register->toArray();
     }
-
 
     public function update(int $id, array $data) : array
     {
@@ -41,10 +40,5 @@ class BaseRepository implements BaseRepositoryContract {
     {
         $registers = $this->model->all();
         return $registers->toArray();
-    }
-
-    public function paginate(int $perPage)
-    {
-
     }
 }

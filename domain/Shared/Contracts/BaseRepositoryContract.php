@@ -12,6 +12,4 @@ interface BaseRepositoryContract {
     function delete(int $id) : bool;
 
     function findAll() : array;
-
-    function paginate(int $perPage);
 }

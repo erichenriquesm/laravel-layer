@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Domain\User\DTOs;
 
-final class StoreUserDTO
+final class RegisterUserDTO
 {
     public function __construct(
         public readonly string $name,

@@ -7,20 +7,13 @@ namespace Domain\User\Repositories;
 use App\Models\User;
 use Domain\User\Contracts\UserRepositoryContract;
 use Domain\Shared\Repositories\BaseRepository;
-use Domain\User\DTOs\StoreUserDTO;
+use Domain\User\DTOs\RegisterUserDTO;
 
 class UserRepository extends BaseRepository implements UserRepositoryContract
 {
-    protected string $modelClass = User::class;
-
     public function __construct()
     {
+        $this->modelClass = User::class;
         parent::__construct();
-    }
-
-    public function methodName(StoreUserDTO $input) : array
-    {
-        // your Function
-        return ['OK'];
     }
 }

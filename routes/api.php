@@ -1,8 +1,5 @@
 <?php
 
-use App\Http\Controllers\ProductController;
-use App\Http\Controllers\SellerController;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -16,6 +13,6 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::prefix('/product')->controller(ProductController::class)->group(function () {
-    Route::post('', 'create');
+Route::get('',  function () {
+    return 'OK';
 });
