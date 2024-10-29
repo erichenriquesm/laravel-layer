@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Domain\User\Repositories;
+namespace Domain\Auth\Repositories;
 
 use App\Models\User;
-use Domain\User\Contracts\UserRepositoryContract;
+use Domain\Auth\Contracts\UserRepositoryContract;
 use Domain\Shared\Repositories\BaseRepository;
-use Domain\User\DTOs\RegisterUserDTO;
+use Domain\Auth\DTOs\RegisterUserDTO;
 
 class UserRepository extends BaseRepository implements UserRepositoryContract
 {

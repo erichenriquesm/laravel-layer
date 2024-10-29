@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Domain\User\Contracts;
+namespace Domain\Auth\Contracts;
 
-use Domain\User\DTOs\RegisterUserDTO;
+use Domain\Auth\DTOs\RegisterUserDTO;
 
 interface RegisterUserContract
 {

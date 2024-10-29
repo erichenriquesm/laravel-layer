@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Domain\User\DTOs;
+namespace Domain\Auth\DTOs;
 
 final class RegisterUserDTO
 {

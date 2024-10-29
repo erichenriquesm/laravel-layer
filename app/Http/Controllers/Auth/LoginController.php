@@ -4,34 +4,32 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use Domain\Shared\Helpers\APIResponse;
-use Domain\Auth\Contracts\RegisterUserContract;
-use Domain\Auth\DTOs\RegisterUserDTO;
+use Domain\Auth\Contracts\LoginContract;
+use Domain\Auth\DTOs\LoginDTO;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
-class RegisterController extends Controller
+class LoginController extends Controller
 {
     public function __construct(
-        protected readonly RegisterUserContract $registerUserContract
+        protected readonly LoginContract $LoginContract
     ){}
 
     public function exec(Request $request) : JsonResponse
     {
         try {
             $validation = Validator::make($request->input(), [
-                'name' => 'required|string',
-                'email' => 'required|email|unique:users,email',
-                'password' => 'required|string|confirmed',
+                'email' => 'required|email',
+                'password' => 'required|string',
             ]);
 
             if($validation->fails()){
                 return APIResponse::unprocessableEntity($validation->errors());
             }
 
-            return APIResponse::success($this->registerUserContract->exec(new RegisterUserDTO(
-                name: $request->input('name'),
+            return APIResponse::success($this->LoginContract->exec(new LoginDTO(
                 email: $request->input('email'),
                 password: $request->input('password'),
             )));
@@ -41,8 +39,10 @@ class RegisterController extends Controller
                 'trace'         => $e->getTrace()
             ]);
 
+            dd($e->getMessage());
+
             return APIResponse::internalServerError([
-                'error' => 'error to register user'
+                'error' => 'error to authenticate user'
             ]);
         }
     }

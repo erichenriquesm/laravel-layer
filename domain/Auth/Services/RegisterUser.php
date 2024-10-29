@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Domain\User\Services;
+namespace Domain\Auth\Services;
 
-use Domain\User\Contracts\RegisterUserContract;
-use Domain\User\DTOs\RegisterUserDTO;
-use Domain\User\Contracts\UserRepositoryContract;
+use Domain\Auth\Contracts\RegisterUserContract;
+use Domain\Auth\DTOs\RegisterUserDTO;
+use Domain\Auth\Contracts\UserRepositoryContract;
 use Illuminate\Support\Facades\Hash;
 
 class RegisterUser implements RegisterUserContract
@@ -17,10 +17,14 @@ class RegisterUser implements RegisterUserContract
 
     public function exec(RegisterUserDTO $input) : array
     {
-        return $this->repository->create([
+        $this->repository->create([
             'name'      => $input->name,
             'email'     => $input->email,
             'password'  => Hash::make($input->password)
         ]);
+
+        return [
+            'message' => 'User registered'
+        ];
     }
 }
