@@ -119,7 +119,7 @@ class LayerPattern extends Command
         {
             protected string \$modelClass = {$this->modelName}::class;
 
-            \$this->modelClass = {$this->name}::class;
+            \$this->modelClass = {$this->modelName}::class;
             parent::__construct();
 
             public function methodName({$this->name}DTO \$input) : array
