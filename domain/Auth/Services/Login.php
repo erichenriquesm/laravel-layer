@@ -9,6 +9,7 @@ use Domain\Auth\Contracts\LoginContract;
 use Domain\Auth\DTOs\LoginDTO;
 use Domain\Auth\Contracts\UserRepositoryContract;
 use Illuminate\Support\Facades\Auth;
+use InvalidArgumentException;
 
 class Login implements LoginContract
 {
@@ -32,8 +33,6 @@ class Login implements LoginContract
             ];
         }
 
-        return [
-            'message' => 'Verify your credentials',
-        ];
+        throw new InvalidArgumentException('invalid_credentials');
     }
 }

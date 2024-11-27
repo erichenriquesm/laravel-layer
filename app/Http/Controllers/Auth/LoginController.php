@@ -34,12 +34,15 @@ class LoginController extends Controller
                 password: $request->input('password'),
             )));
         }catch(\Exception $e) {
+            $message = $e->getMessage();
+            if($message === 'invalid_credentials') {
+                return APIResponse::unauthorized(['Verify your credentials']);
+            }
+
             Log::error(__CLASS__, [
                 'message'       => $e->getMessage(),
                 'trace'         => $e->getTrace()
             ]);
-
-            dd($e->getMessage());
 
             return APIResponse::internalServerError([
                 'error' => 'error to authenticate user'

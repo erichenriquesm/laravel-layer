@@ -8,6 +8,7 @@ final class APIResponse
     const STATUS_SUCCESS = "SUCCESS";
     const STATUS_UNPROCESSABLE_ENTITY = "UNPROCESSABLE_ENTITY";
     const STATUS_INTERNAL_SERVER_ERROR = "INTERNAL_SERVER_ERROR";
+    const STATUS_UNAUTHORIZED = "INTERNAL_SERVER_ERROR";
 
     private static function generateResponse(string $status, array|string $messages, int $statusCode): JsonResponse
     {
@@ -30,6 +31,11 @@ final class APIResponse
     public static function internalServerError(array|string $messages): JsonResponse
     {
         return self::generateResponse(self::STATUS_INTERNAL_SERVER_ERROR, $messages, 500);
+    }
+
+    public static function unauthorized(array|string $messages): JsonResponse
+    {
+        return self::generateResponse(self::STATUS_UNAUTHORIZED, $messages, 401);
     }
 }
 
