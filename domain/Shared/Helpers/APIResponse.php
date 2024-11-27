@@ -1,35 +1,35 @@
 <?php
-
 namespace Domain\Shared\Helpers;
 
 use Illuminate\Http\JsonResponse;
 
-class APIResponse {
-    static $SUCCESS = "SUCCESS";
-    static $UNPROCESSABLE_ENTITY = "UNPROCESSABLE_ENTITY";
-    static $INTERNAL_SERVER_ERROR = "INTERNAL_SERVER_ERROR";
+final class APIResponse 
+{
+    const STATUS_SUCCESS = "SUCCESS";
+    const STATUS_UNPROCESSABLE_ENTITY = "UNPROCESSABLE_ENTITY";
+    const STATUS_INTERNAL_SERVER_ERROR = "INTERNAL_SERVER_ERROR";
 
-    public static function success(array|string $messages) : JsonResponse
+    private static function generateResponse(string $status, array|string $messages, int $statusCode): JsonResponse
     {
         return response()->json([
-            'status'   => self::$SUCCESS,
-            'messages' => is_string($messages) ? json_decode($messages) : $messages
-        ], 200);
+            'status'   => $status,
+            'messages' => is_string($messages) ? json_decode($messages, true) : $messages
+        ], $statusCode);
     }
 
-    public static function unprocessableEntity(array|string $messages) : JsonResponse
+    public static function success(array|string $messages): JsonResponse
     {
-        return response()->json([
-            'status'   => self::$UNPROCESSABLE_ENTITY,
-            'messages' => is_string($messages) ? json_decode($messages) : $messages
-        ], 422);
+        return self::generateResponse(self::STATUS_SUCCESS, $messages, 200);
     }
 
-    public static function internalServerError(array|string $messages) : JsonResponse
+    public static function unprocessableEntity(array|string $messages): JsonResponse
     {
-        return response()->json([
-            'status'   => self::$INTERNAL_SERVER_ERROR,
-            'messages' => is_string($messages) ? json_decode($messages) : $messages
-        ], 500);
+        return self::generateResponse(self::STATUS_UNPROCESSABLE_ENTITY, $messages, 422);
+    }
+
+    public static function internalServerError(array|string $messages): JsonResponse
+    {
+        return self::generateResponse(self::STATUS_INTERNAL_SERVER_ERROR, $messages, 500);
     }
 }
+
