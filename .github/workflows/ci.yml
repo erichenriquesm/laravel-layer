@@ -24,6 +24,8 @@ jobs:
       - name: Setup Docker
         run: |
           docker-compose up -d --build
+          docker exec laravel-layer-app-1 composer install
+
 
       # Esperar os serviços
       - name: Wait for services
