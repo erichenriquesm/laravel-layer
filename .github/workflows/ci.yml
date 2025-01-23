@@ -26,6 +26,10 @@ jobs:
           docker-compose up -d --build
           docker exec laravel-layer-app-1 composer install
 
+      # Copiar o .env antes de rodar as migrações
+      - name: Copy .env from env.example
+        run: |
+          docker exec laravel-layer-app-1 cp .env.example .env
 
       # Esperar os serviços
       - name: Wait for services
