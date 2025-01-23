@@ -1,0 +1,41 @@
+name: Continuous Integration with Docker
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  continuous_integration:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout do repositório
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Configurando Docker Compose
+      - name: Setup Docker
+        run: |
+          docker-compose up -d --build
+
+      # Aguardando os serviços subirem
+      - name: Wait for services
+        run: |
+          sleep 10
+
+      # Executando as migrações no container
+      - name: Run migrations
+        run: |
+          docker exec  laravel-layer-app-1 php artisan migrate --no-interaction --force
+
+      # Executando os testes no container
+      - name: Run tests
+        run: |
+          docker exec  laravel-layer-app-1 php artisan test --no-interaction
+
+      # Derrubando os contêineres após os testes
+      - name: Tear down Docker
+        if: always()
+        run: |
+          docker-compose down
