@@ -17,8 +17,8 @@ jobs:
       # Instalar o Docker Compose
       - name: Install Docker Compose
         run: |
-          sudo apt-get update
-          sudo apt-get install -y docker-compose-plugin
+          sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
 
       # Subir os serviços
       - name: Setup Docker
@@ -26,6 +26,10 @@ jobs:
           docker-compose up -d --build
           docker exec laravel-layer-app-1 composer install
 
+      # Copiar o .env antes de rodar as migrações
+      - name: Copy .env from env.example
+        run: |
+          docker exec laravel-layer-app-1 cp .env.example .env
 
       # Esperar os serviços
       - name: Wait for services
