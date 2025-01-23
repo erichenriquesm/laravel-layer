@@ -18,6 +18,10 @@ RUN docker-php-ext-install pdo pdo_mysql mysqli
 # Instale o inotify-tools
 RUN apt-get update && apt-get install -y inotify-tools
 
+# Instalar a extensão PhpRedis
+RUN pecl install redis \
+    && docker-php-ext-enable redis
+
 # Exponha a porta 80 para ac
 
 # Instale o Composer globalmente
