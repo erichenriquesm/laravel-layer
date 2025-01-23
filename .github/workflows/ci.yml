@@ -14,25 +14,31 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Configurando Docker Compose
+      # Instalação do Docker Compose
+      - name: Install Docker Compose
+        run: |
+          sudo curl -L "https://github.com/docker/compose/releases/download/2.6.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/bin/docker-compose
+          sudo chmod +x /usr/bin/docker-compose
+          docker-compose --version
+
+      # Subindo os serviços com Docker Compose
       - name: Setup Docker
         run: |
           docker-compose up -d --build
 
       # Aguardando os serviços subirem
       - name: Wait for services
-        run: |
-          sleep 10
+        run: sleep 10
 
       # Executando as migrações no container
       - name: Run migrations
         run: |
-          docker exec  laravel-layer-app-1 php artisan migrate --no-interaction --force
+          docker exec laravel-layer-app-1 php artisan migrate --no-interaction --force
 
       # Executando os testes no container
       - name: Run tests
         run: |
-          docker exec  laravel-layer-app-1 php artisan test --no-interaction
+          docker exec laravel-layer-app-1 php artisan test --no-interaction
 
       # Derrubando os contêineres após os testes
       - name: Tear down Docker
