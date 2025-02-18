@@ -37,7 +37,7 @@ jobs:
       # Executar os testes
       - name: Run tests
         run: |
-          docker exec laravel-layer-app-1 php artisan test --no-interaction
+          docker-compose exec app php artisan test --no-interaction
 
       # Derrubar os serviços
       - name: Tear down Docker
