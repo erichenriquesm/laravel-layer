@@ -1,6 +1,6 @@
 .PHONY: setup up down wait-db migrate seed
 
-setup: up wait-db migrate seed
+setup: up wait-db install-composer migrate seed
 	@echo "✅ Setup concluído!"
 
 restart: down up
@@ -19,6 +19,9 @@ wait-db:
 	@until docker-compose exec db mysqladmin ping -h"localhost" --silent; do \
 		sleep 2; \
 	done
+
+install-composer:
+    @docker-compose exec app composer install
 
 migrate:
 	@echo "📌 Rodando as migrações..."
