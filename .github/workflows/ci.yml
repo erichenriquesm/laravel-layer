@@ -37,7 +37,7 @@ jobs:
       # Executar os testes
       - name: Run tests
         run: |
-          docker-compose exec app php artisan test --no-interaction
+          docker-compose exec app php artisan test
 
       # Derrubar os serviços
       - name: Tear down Docker
