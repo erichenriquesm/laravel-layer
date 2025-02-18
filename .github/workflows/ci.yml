@@ -20,10 +20,10 @@ jobs:
           sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
           sudo chmod +x /usr/local/bin/docker-compose
 
-      # Copiar o .env antes de rodar as migrações
-      - name: Copy .env from env.example
-        run: |
-          docker exec laravel-layer-app-1 cp .env.example .env
+      # Cria o .env com o conteúdo do example
+      - name: Create .env file
+        run: cp .env.example .env
+
 
       # Subir os serviços
       - name: Setup Project
