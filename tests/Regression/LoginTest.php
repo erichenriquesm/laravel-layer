@@ -26,8 +26,8 @@ final class LoginTest extends TestCase
     public function test_login_route_with_valid_credentials(): void
     {
         $response = $this->post('/login', [
-            'email'     => 'eric@greenn.com.br',
-            'password'  => '@123Mudar!'
+            'email'     => 'layer@gmail.com',
+            'password'  => '123Mudar!'
         ]);
 
         $response->assertStatus(200)

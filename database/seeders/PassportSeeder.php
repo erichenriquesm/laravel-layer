@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\User;
 use Illuminate\Database\Seeder;
 use Laravel\Passport\Client;
 use Illuminate\Support\Facades\DB;
@@ -14,7 +15,7 @@ class PassportSeeder extends Seeder
      */
     public function run(): void
     {
-        // Criar ou atualizar Personal Access Client
+        # Criar ou atualizar Personal Access Client
         $personalClient = Client::updateOrCreate(
             ['personal_access_client' => true, 'password_client' => false],
             [
@@ -27,8 +28,8 @@ class PassportSeeder extends Seeder
             ]
         );
 
-        // Criar ou atualizar Password Grant Client
-        $passwordClient = Client::updateOrCreate(
+        # Criar ou atualizar Password Grant Client
+        Client::updateOrCreate(
             ['password_client' => true, 'personal_access_client' => false],
             [
                 'name' => 'Password Grant Client',
@@ -40,10 +41,20 @@ class PassportSeeder extends Seeder
             ]
         );
 
-        // Atualizar variáveis no .env (se necessário)
+        # Atualizar variáveis no .env (se necessário)
         DB::table('oauth_personal_access_clients')->updateOrInsert(
             ['client_id' => $personalClient->id],
             ['created_at' => now(), 'updated_at' => now()]
+        );
+
+        # Cria ou atualiza usuário base
+        User::updateOrCreate(
+            ['email' => 'layer@gmail.com'],
+            [
+                'name' => 'Layer Project',
+                'email' => 'layer@gmail.com',
+                'password' => '$2y$12$IoAh36uDDlskW.d2MuCfZ.heoiaxhP7N5ljkwLQ6uulVNFikpPQrq'
+            ]
         );
 
         $this->command->info('✅ Passport Clients e Personal Access configurados com sucesso!');
