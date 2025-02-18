@@ -1,4 +1,4 @@
-# Use a imagem oficial do PHP com a última versão
+# Use a imagem oficial do PHP com a versão FPM
 FROM php:8.2.5-fpm
 
 # Instale as dependências necessárias
@@ -8,21 +8,13 @@ RUN apt-get update && apt-get install -y \
     libfreetype6-dev \
     zip \
     unzip \
+    inotify-tools \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install gd pdo pdo_mysql
-
-
-# Instale extensões PHP necessárias
-RUN docker-php-ext-install pdo pdo_mysql mysqli
-
-# Instale o inotify-tools
-RUN apt-get update && apt-get install -y inotify-tools
+    && docker-php-ext-install gd pdo pdo_mysql mysqli
 
 # Instalar a extensão PhpRedis
 RUN pecl install redis \
     && docker-php-ext-enable redis
-
-# Exponha a porta 80 para ac
 
 # Instale o Composer globalmente
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
@@ -31,13 +23,14 @@ RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local
 WORKDIR /var/www
 
 # Copie o código do projeto para o container
+COPY nginx/www.conf /usr/local/etc/php-fpm.d/www.conf
 COPY . /var/www
 
 # Instale as dependências do Composer
-RUN composer install
+RUN composer install --no-dev --optimize-autoloader
 
-# Exponha a porta 8000 para acesso externo
-EXPOSE 8000
+# Exponha a porta usada pelo PHP-FPM
+EXPOSE 9000
 
-# Comando para iniciar o servidor
-CMD ["php", "-S", "0.0.0.0:8000", "-t", "public"]
+# Comando para iniciar o PHP-FPM
+CMD ["php-fpm"]
