@@ -19,6 +19,8 @@ services:
       MYSQL_PASSWORD: ${DB_PASSWORD}
     ports:
       - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
 
   redis:
     image: redis:alpine
@@ -41,3 +43,5 @@ services:
 
 volumes:
   redis_data:
+  mysql_data:
+    driver: local
