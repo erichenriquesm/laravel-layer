@@ -1,6 +1,6 @@
 .PHONY: setup up down wait-db migrate seed
 
-setup: up wait-db install-composer migrate seed
+setup: up wait-db boot-environment migrate seed
 	@echo "✅ Setup concluído!"
 
 restart: down up
@@ -20,8 +20,9 @@ wait-db:
 		sleep 2; \
 	done
 
-install-composer:
+boot-environment:
 	@docker-compose exec app composer install
+	@docker-compose exec app php artisan passport:keys
 
 migrate:
 	@echo "📌 Rodando as migrações..."
