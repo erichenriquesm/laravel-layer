@@ -21,7 +21,7 @@ wait-db:
 	done
 
 install-composer:
-    @docker-compose exec app composer install
+	@docker-compose exec app composer install
 
 migrate:
 	@echo "📌 Rodando as migrações..."
