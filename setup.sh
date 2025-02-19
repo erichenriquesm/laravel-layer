@@ -9,6 +9,7 @@ until docker-compose exec db mysqladmin ping -h"localhost" --silent; do
 done
 
 docker-compose exec app composer install
+docker-compose exec app php artisan passport:keys
 
 echo "📌 Rodando as migrações..."
 docker-compose exec app php artisan migrate --force
