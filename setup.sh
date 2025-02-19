@@ -8,6 +8,8 @@ until docker-compose exec db mysqladmin ping -h"localhost" --silent; do
     sleep 2
 done
 
+docker-compose exec app composer install
+
 echo "📌 Rodando as migrações..."
 docker-compose exec app php artisan migrate --force
 
