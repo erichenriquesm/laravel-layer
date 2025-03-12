@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Jobs\ProcessUserJob;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -14,5 +16,8 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::get('',  function () {
+    $data = ['name' => 'John Doe', 'email' => 'john@example.com'];
+
+    dispatch(new ProcessUserJob($data))->onQueue('user');
     return 'OK';
 });
