@@ -9,15 +9,18 @@ RUN apt-get update && apt-get install -y \
     zip \
     unzip \
     inotify-tools \
+    librabbitmq-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install gd pdo pdo_mysql mysqli
+    && docker-php-ext-install gd pdo pdo_mysql mysqli \
+    && docker-php-ext-install sockets
 
-# Instalar a extensão PhpRedis
-RUN pecl install redis \
-    && docker-php-ext-enable redis
+# Instalar a extensão PhpRedis e PHP AMQP
+RUN pecl install redis amqp \
+    && docker-php-ext-enable redis amqp
 
 # Instale o Composer globalmente
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
 
 # Configure o diretório de trabalho no container
 WORKDIR /var/www
