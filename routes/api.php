@@ -1,9 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Jobs\ProcessUserJob;
-use Domain\Auth\Contracts\RegisterUserContract;
-use Domain\Shared\Helpers\Queue;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -17,10 +15,5 @@ use Domain\Shared\Helpers\Queue;
 */
 
 Route::get('',  function () {
-    $data = ['name' => 'John Doe', 'email' => 'john@example.com'];
-
-    // dispatch(new ProcessUserJob($data))->onQueue('user');
-
-    Queue::publish('email', RegisterUserContract::class, 'exec', $data);
     return 'OK';
 });
