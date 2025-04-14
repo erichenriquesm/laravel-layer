@@ -1,19 +1,19 @@
 <?php
 
-namespace Tests\Regression;
+namespace Tests\Regression\Auth\Controllers;
 
 use Tests\TestCase;
 
-final class LoginTest extends TestCase
+final class LoginControllerTest extends TestCase
 {
-    public function test_login_route_without_credentials(): void
+    public function testLoginRouteWithoutCredentials(): void
     {
         $response = $this->post('/login');
 
         $response->assertStatus(422);
     }
 
-    public function test_login_route_with_invalid_credentials(): void
+    public function testLoginRouteWithInvalidCredentials(): void
     {
         $response = $this->post('/login', [
             'email'     => 'example@gmail.com',
@@ -23,7 +23,7 @@ final class LoginTest extends TestCase
         $response->assertStatus(401);
     }
 
-    public function test_login_route_with_valid_credentials(): void
+    public function testLoginRouteWithValidCredentials(): void
     {
         $response = $this->post('/login', [
             'email'     => 'layer@gmail.com',
