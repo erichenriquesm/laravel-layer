@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Domain\Shared\Helpers\APIResponse;
 use Domain\Auth\Contracts\RegisterUserContract;
 use Domain\Auth\DTOs\RegisterUserDTO;
+use Domain\Shared\DomainTypes\Email;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -21,8 +22,8 @@ class RegisterController extends Controller
     {
         try {
             $validation = Validator::make($request->input(), [
-                'name' => 'required|string',
-                'email' => 'required|email|unique:users,email',
+                'name'     => 'required|string',
+                'email'    => 'required|unique:users,email',
                 'password' => 'required|string|confirmed',
             ]);
 
@@ -32,7 +33,7 @@ class RegisterController extends Controller
 
             return APIResponse::success($this->registerUserContract->exec(new RegisterUserDTO(
                 name: $request->input('name'),
-                email: $request->input('email'),
+                email: new Email($request->input('email')),
                 password: $request->input('password'),
             )));
         }catch(\Exception $e) {
