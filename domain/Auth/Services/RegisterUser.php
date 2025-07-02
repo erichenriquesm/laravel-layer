@@ -19,7 +19,7 @@ class RegisterUser implements RegisterUserContract
     {
         $this->repository->create([
             'name'      => $input->name,
-            'email'     => $input->email,
+            'email'     => $input->email->getValue(),
             'password'  => Hash::make($input->password)
         ]);
 
