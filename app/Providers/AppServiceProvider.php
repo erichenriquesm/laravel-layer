@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Providers\Bindings\Repositories;
+use App\Providers\Bindings\Services;
 use Domain\Auth\Contracts\LoginContract;
 use Domain\Auth\Contracts\UserRepositoryContract;
 use Domain\Auth\Repositories\UserRepository;
@@ -21,10 +23,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->bind(UserRepositoryContract::class, UserRepository::class);
-        $this->app->bind(RegisterUserContract::class, RegisterUser::class);
-        $this->app->bind(LoginContract::class, Login::class);
+        foreach (Services::get() as $interface => $implementation) {
+            $this->app->bind($interface, $implementation);
+        }
 
+        foreach (Repositories::get() as $interface => $implementation) {
+            $this->app->bind($interface, $implementation);
+        }
     }
 
     /**

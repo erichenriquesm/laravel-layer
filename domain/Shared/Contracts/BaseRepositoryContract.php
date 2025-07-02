@@ -2,7 +2,6 @@
 namespace Domain\Shared\Contracts;
 
 interface BaseRepositoryContract {
-
     function create(array $data) :array;
 
     function update(int $id, array $data) : array;

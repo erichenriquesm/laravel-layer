@@ -13,7 +13,7 @@ use PhpAmqpLib\Message\AMQPMessage;
 use ReflectionException;
 use ReflectionMethod;
 
-final class Queue 
+final class Queue
 {
     protected static $isBooted = false;
     protected static $connection;
@@ -26,7 +26,7 @@ final class Queue
     /**
      * Inicia a conexão com o RabbitMQ e abre o canal.
      *
-     * @return void 
+     * @return void
      */
     private static function boot()
     {
@@ -62,17 +62,17 @@ final class Queue
      * @param string $class Classe que terá o método a ser executado.
      *
      * @param string $method Nome do método a ser executado.
-     * 
+     *
      * @param ...$args Argumentos que serão passados ao método.
      *
      * @return void
      */
-    public static function publish(string $queue, string $class, string $method, ...$args) : void
-    {   
-        /** 
+    public static function publish(string $queue, string $class, string $method, ...$args): void
+    {
+        /**
          * Define a mensagem a ser enviado pelo RabbitMQ passanddo primeiramente  por um tratamento já que o RabbitMQ
          * espera receber a mensagem no formato AMQPMessage
-        */
+         */
         $message = self::parseMessage([
             '__RID' => Hash::make(Str::random(10)),
             '__class' => $class,
@@ -85,13 +85,13 @@ final class Queue
         # Publica a mensagem.
         self::directPublish($queue, $message);
     }
-    
+
     /**
      * Atribui a conexão à propriedade connection com o valor sendo uma instãncia AMQPStreamConnection.
      *
      * @return void
      */
-    private static function connect() : void
+    private static function connect(): void
     {
         self::$connection = new AMQPStreamConnection(
             env('RABBITMQ_HOST'),  # Host do RabbitMQ (endereço do servidor)
@@ -99,9 +99,8 @@ final class Queue
             env('RABBITMQ_USER'),  # Usuário para autenticação
             env('RABBITMQ_PASSWORD')  # Senha para autenticação
         );
-        
     }
-    
+
     /**
      * Atribui a propriedade channel com o canal obtido através da conexão.
      *
@@ -111,7 +110,7 @@ final class Queue
     {
         self::$channel = self::$connection->channel();
     }
-    
+
     /**
      * Recebe a mensagem a ser enviada para o RabbitMQ e retorna no formato AMQPMessage.
      *
@@ -132,7 +131,7 @@ final class Queue
             'delivery_mode' => 2,
         ]);
     }
-    
+
     /**
      * Publica a mensagem no fila específico.
      *
@@ -142,7 +141,7 @@ final class Queue
      *
      * @return void.
      */
-    public static function directPublish(string $queue, AMQPMessage $message) : void
+    public static function directPublish(string $queue, AMQPMessage $message): void
     {
         # Inicializa a conexão com o RabbitMQ.
         self::boot();
@@ -176,7 +175,7 @@ final class Queue
             false,   # Parâmetro "exclusive" - define se a fila é exclusiva para este consumidor
             false    # Parâmetro "auto_delete" - define se a fila será excluída automaticamente quando não houver consumidores
         );
-        
+
 
         self::$consumerCounts[$returnedDeclare[0] ?? ''] = $returnedDeclare[2] ?? 0;
         # Define a fila atual.
@@ -226,19 +225,19 @@ final class Queue
 
     /**
      * Comita um lote de mensagens publicadas caso haja alterações.
-     * 
+     *
      * Este método verifica se o lote de mensagens (representado por `self::$dirty`)
-     * precisa ser enviado. Caso haja mensagens não enviadas, ele chama o método `publish_batch` 
-     * para publicar todas as mensagens de uma vez, reseta o estado de alterações e 
+     * precisa ser enviado. Caso haja mensagens não enviadas, ele chama o método `publish_batch`
+     * para publicar todas as mensagens de uma vez, reseta o estado de alterações e
      * redefine a contagem de mensagens não enviadas.
-     * 
+     *
      * @return void
      */
     public static function commit()
     {
         # Inicializa a conexão com o RabbitMQ.
         self::boot();
-        
+
         if (self::$dirty) { # Verifica se há mensagens não enviadas (lote sujo).
             self::$channel->publish_batch(); # Publica todas as mensagens acumuladas no lote.
             self::$dirty = false; # Reseta o estado de sujo, indicando que o lote foi enviado.
@@ -275,7 +274,7 @@ final class Queue
             $reflection = new ReflectionMethod($class, $method);
         } catch (ReflectionException $re) {
             Log::warning(
-                __CLASS__.'.'.__FUNCTION__.": \"{$re->getMessage()}\"",
+                __CLASS__ . '.' . __FUNCTION__ . ": \"{$re->getMessage()}\"",
                 [
                     'messageBody' => $messageBody,
                     'class' => $class,
@@ -286,11 +285,12 @@ final class Queue
             return false;
         }
 
-        if ($reflection->isStatic()) {
-            return $reflection->invoke(null, ...$args);
+        $classInstance = null;
+        if (!$reflection->isStatic()) {
+            $classInstance = new $class;
         }
 
-        return $reflection->invoke(new $class, ...$args);
+        return $reflection->invoke($classInstance, ...$args);
     }
 
     /**
@@ -300,13 +300,13 @@ final class Queue
      * cada vez que uma nova mensagem for recebida da fila. A função de callback recebe a mensagem como argumento.
      *
      * @param string $queue O nome da fila a ser consumida. Este parâmetro define de qual fila as mensagens serão retiradas.
-     * 
+     *
      * @param Closure $closure A função de callback que será chamada para processar cada mensagem recebida da fila.
      *                         A função recebe a mensagem como argumento para processamento.
      *
      * @return void
      */
-    public static function consume(string $queue, Closure $closure) : void
+    public static function consume(string $queue, Closure $closure): void
     {
         # Inicializa a conexão com o RabbitMQ.
         self::boot();

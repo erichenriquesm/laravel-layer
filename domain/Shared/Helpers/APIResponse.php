@@ -3,7 +3,7 @@ namespace Domain\Shared\Helpers;
 
 use Illuminate\Http\JsonResponse;
 
-final class APIResponse 
+final class APIResponse
 {
     const STATUS_SUCCESS = "SUCCESS";
     const STATUS_UNPROCESSABLE_ENTITY = "UNPROCESSABLE_ENTITY";
@@ -38,4 +38,3 @@ final class APIResponse
         return self::generateResponse(self::STATUS_UNAUTHORIZED, $messages, 401);
     }
 }
-

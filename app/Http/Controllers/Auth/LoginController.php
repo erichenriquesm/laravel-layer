@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Validator;
 class LoginController extends Controller
 {
     public function __construct(
-        protected readonly LoginContract $LoginContract
+        protected readonly LoginContract $loginContract
     ){}
 
     public function exec(Request $request) : JsonResponse
@@ -29,24 +29,21 @@ class LoginController extends Controller
                 return APIResponse::unprocessableEntity($validation->errors());
             }
 
-            return APIResponse::success($this->LoginContract->exec(new LoginDTO(
+            return APIResponse::success($this->loginContract->exec(new LoginDTO(
                 email: $request->input('email'),
                 password: $request->input('password'),
             )));
         }catch(\Exception $e) {
             $message = $e->getMessage();
-            if($message === 'invalid_credentials') {
-                return APIResponse::unauthorized(['Verify your credentials']);
+            if($message !== 'invalid_credentials') {
+                Log::error(__CLASS__, [
+                    'message'       => $e->getMessage(),
+                    'trace'         => $e->getTrace()
+                ]);
             }
 
-            Log::error(__CLASS__, [
-                'message'       => $e->getMessage(),
-                'trace'         => $e->getTrace()
-            ]);
 
-            return APIResponse::internalServerError([
-                'error' => 'error to authenticate user'
-            ]);
+            return APIResponse::unauthorized(['Verify your credentials']);
         }
     }
 }

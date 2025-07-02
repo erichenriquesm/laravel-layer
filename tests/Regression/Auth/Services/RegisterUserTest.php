@@ -36,7 +36,6 @@ final class RegisterUserTest extends TestCase
     {
         try {
             $this->registerUser->exec(null);
-    
         } catch(\TypeError $e) {
             $this->assertStringContainsString('Argument #1 ($input) must be of type Domain\Auth\DTOs\RegisterUserDTO', $e->getMessage());
         }
