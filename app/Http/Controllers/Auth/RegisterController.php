@@ -37,20 +37,25 @@ class RegisterController extends Controller
                 password: $request->input('password'),
             )));
         }catch(\Exception $e) {
-            $errorMessage = $e->getMessage();
-            if($errorMessage === 'Invalid e-mail.'){
-                return APIResponse::unprocessableEntity([
-                    'email' => 'Email field is invalid'
-                ]);
-            }
-            Log::error(__CLASS__, [
-                'message'       => $errorMessage,
-                'trace'         => $e->getTrace()
-            ]);
+            return $this->handleException($e);
+        }
+    }
 
-            return APIResponse::badRequest([
-                'error' => 'error to register user'
+    private function handleException(\Exception $e): JsonResponse
+    {
+        $errorMessage = $e->getMessage();
+        if($errorMessage === 'Invalid e-mail.'){
+            return APIResponse::unprocessableEntity([
+                'email' => 'Email field is invalid'
             ]);
         }
+        Log::error(__CLASS__, [
+            'message'       => $errorMessage,
+            'trace'         => $e->getTrace()
+        ]);
+
+        return APIResponse::badRequest([
+            'error' => 'error to register user'
+        ]);
     }
 }
