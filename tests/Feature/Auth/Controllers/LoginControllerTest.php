@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Regression\Auth\Controllers;
+namespace Tests\Feature\Auth\Controllers;
 
 use Tests\TestCase;
 

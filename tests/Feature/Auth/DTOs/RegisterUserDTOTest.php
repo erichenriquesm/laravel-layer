@@ -1,8 +1,9 @@
 <?php
 
-namespace Tests\Regression\RegisterUser\DTOs;
+namespace Tests\Feature\RegisterUser\DTOs;
 
 use Domain\Auth\DTOs\RegisterUserDTO;
+use Domain\Shared\DomainTypes\Email;
 use Tests\TestCase;
 use Faker\Factory as Faker;
 
@@ -22,7 +23,7 @@ final class RegisterUserDTOTest extends TestCase
         try {
             new RegisterUserDTO(
                 name: null,
-                email: 'teste@email.com',
+                email: new Email('teste@email.com'),
                 password: 'senha123'
             );
 
@@ -43,7 +44,7 @@ final class RegisterUserDTOTest extends TestCase
 
             $this->fail('Esperado TypeError ao passar array para email');
         } catch (\TypeError $e) {
-            $this->assertStringContainsString('must be of type string', $e->getMessage());
+            $this->assertStringContainsString('must be of type Domain\Shared\DomainTypes\Email', $e->getMessage());
         }
     }
 
@@ -53,7 +54,7 @@ final class RegisterUserDTOTest extends TestCase
         try {
             new RegisterUserDTO(
                 name: 'Fulano',
-                email: 'teste@email.com',
+                email: new Email('teste@email.com'),
                 password: null
             );
 
@@ -67,7 +68,7 @@ final class RegisterUserDTOTest extends TestCase
     public function testValidRegisterUserDTO()
     {
         $name =  $this->faker->name;
-        $email =  $this->faker->email;
+        $email =  new Email($this->faker->email);
         $password =  $this->faker->password;
         $dto = new RegisterUserDTO(
             name: $name,
@@ -76,7 +77,7 @@ final class RegisterUserDTOTest extends TestCase
         );
 
         $this->assertEquals($name, $dto->name);
-        $this->assertEquals($email, $dto->email);
+        $this->assertEquals($email->getValue(), $dto->email->getValue());
         $this->assertEquals($password, $dto->password);
     }
 }

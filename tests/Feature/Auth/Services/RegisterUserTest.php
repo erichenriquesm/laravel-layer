@@ -1,9 +1,10 @@
 <?php
 
-namespace Tests\Regression\RegisterUser\Services;
+namespace Tests\Feature\RegisterUser\Services;
 
 use Domain\Auth\Contracts\RegisterUserContract;
 use Domain\Auth\DTOs\RegisterUserDTO;
+use Domain\Shared\DomainTypes\Email;
 use Tests\TestCase;
 use Faker\Factory as Faker;
 
@@ -20,7 +21,7 @@ final class RegisterUserTest extends TestCase
         $this->faker = Faker::create();
 
         $name =  $this->faker->name;
-        $email =  $this->faker->email;
+        $email =  new Email($this->faker->email);
         $password =  $this->faker->password;
 
         $this->registerUserDTO = new RegisterUserDTO(

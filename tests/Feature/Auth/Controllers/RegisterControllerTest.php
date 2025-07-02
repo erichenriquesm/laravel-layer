@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Regression\RegisterUser\Controllers;
+namespace Tests\Feature\RegisterUser\Controllers;
 
 use Tests\TestCase;
 use Faker\Factory as Faker;
