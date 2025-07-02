@@ -42,7 +42,6 @@ class LoginController extends Controller
                 ]);
             }
 
-
             return APIResponse::unauthorized(['Verify your credentials']);
         }
     }
