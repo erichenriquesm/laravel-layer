@@ -21,6 +21,7 @@ class AuthController extends Controller
         protected readonly RegisterUser $registerUserService,
     ) {
     }
+    
     public function register(Request $request): JsonResponse
     {
         try {
