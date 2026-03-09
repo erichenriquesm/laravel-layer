@@ -1,3 +1,33 @@
+# Laravel Layer — Base para novos projetos
+
+Projeto base Laravel com **Docker**, **autenticação (Passport)**, **domain layer** (services + DTOs) e **testes em Pest**. Use como ponto de partida para novos backends.
+
+### O que já vem
+
+- **Auth**: registro, login e rota `/me` com Laravel Passport
+- **Estrutura**: services em `domain/` (ex.: `domain/Auth/Services`), DTOs, tipos de domínio (`domain/Shared`), controllers por contexto
+- **Testes**: Pest em `tests/Feature/Auth` (controllers, services, DTOs)
+- **Dev**: Docker Compose, Makefile e scripts `.sh` para setup idempotente (incl. `passport:keys --force`)
+
+---
+
+## 🚀 Como usar como base
+
+```bash
+# Clone o repositório
+git clone <url-do-repo> meu-projeto && cd meu-projeto
+
+# Copie o ambiente e ajuste se precisar (DB, etc.)
+cp .env.example .env
+
+# Sobe containers, instala deps, gera keys do Passport, migra e seed
+make setup
+```
+
+Depois disso, a API estará no ar (rotas em `routes/auth.php`). Para rodar os testes: `docker-compose exec app php artisan test`.
+
+---
+
 # 🛠️ Setup do Projeto com Docker
 
 Este projeto utiliza **Docker** para configurar e gerenciar o ambiente de desenvolvimento.  
@@ -62,13 +92,13 @@ Para derrubar:
 ---
 
 ## 🏠️ **Configuração do Docker**
-Caso esteja rodando pela primeira vez, lembre-se de configurar as variáveis no `.env` antes de rodar os comandos.  
-Exemplo de variáveis essenciais:
+Caso esteja rodando pela primeira vez, copie o exemplo e ajuste as variáveis: `cp .env.example .env`.  
+Variáveis essenciais (exemplo):
 
 ```
 DB_DATABASE=nome_do_banco
-DB_USERNAME=root
-DB_PASSWORD=root
+DB_USERNAME=layer
+DB_PASSWORD=layer
 ```
 
 Agora é só rodar o `setup` e começar a desenvolver! 🚀🔥
