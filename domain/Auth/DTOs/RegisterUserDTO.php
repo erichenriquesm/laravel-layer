@@ -12,5 +12,5 @@ final class RegisterUserDTO
         public readonly string $name,
         public readonly Email $email,
         public readonly string $password
-    ){}
+    ) {}
 }

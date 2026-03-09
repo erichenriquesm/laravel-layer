@@ -1,14 +1,11 @@
 <?php
 
-use App\Http\Controllers\Auth\LoginController;
-use App\Http\Controllers\Auth\MeController;
-use App\Http\Controllers\Auth\RegisterController;
+use App\Http\Controllers\AuthController;
 use Illuminate\Support\Facades\Route;
 
-
-Route::post('register', [RegisterController::class, 'exec']);
-Route::post('login', [LoginController::class, 'exec']);
+Route::post('register', [AuthController::class, 'register']);
+Route::post('login', [AuthController::class, 'login']);
 
 Route::group(['middleware' => 'auth'], function () {
-    Route::get('me', [MeController::class, 'exec']);
+    Route::get('me', [AuthController::class, 'me']);
 });

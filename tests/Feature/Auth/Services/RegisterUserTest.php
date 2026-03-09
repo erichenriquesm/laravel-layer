@@ -1,53 +1,40 @@
 <?php
 
-namespace Tests\Feature\RegisterUser\Services;
-
-use Domain\Auth\Contracts\RegisterUserContract;
 use Domain\Auth\DTOs\RegisterUserDTO;
+use Domain\Auth\Services\RegisterUser;
 use Domain\Shared\DomainTypes\Email;
-use Tests\TestCase;
 use Faker\Factory as Faker;
 
-final class RegisterUserTest extends TestCase
-{
-    protected $faker;
-    protected $registerUserDTO;
-    protected $registerUser;
+beforeEach(function () {
+    $this->faker = Faker::create();
 
-    protected function setUp(): void
-    {
-        parent::setUp();
+    $name = $this->faker->name;
+    $email = new Email($this->faker->email);
+    $password = $this->faker->password;
 
-        $this->faker = Faker::create();
+    $this->registerUserDTO = new RegisterUserDTO(
+        name: $name,
+        email: $email,
+        password: $password
+    );
 
-        $name =  $this->faker->name;
-        $email =  new Email($this->faker->email);
-        $password =  $this->faker->password;
+    $this->registerUser = app(RegisterUser::class);
+});
 
-        $this->registerUserDTO = new RegisterUserDTO(
-            name: $name,
-            email: $email,
-            password: $password
-        );
+test('register user throws exception with invalid dto', function () {
+    $this->expectException(\TypeError::class);
+    $this->expectExceptionMessage('Argument #1 ($input) must be of type Domain\Auth\DTOs\RegisterUserDTO');
 
-        $this->registerUser = app(RegisterUserContract::class);
-    }
+    /** @var mixed $invalid */
+    $invalid = null;
+    $this->registerUser->exec($invalid);
+});
 
-    public function testRegisterUserThrowsExceptionWithInvalidDTO()
-    {
-        try {
-            $this->registerUser->exec(null);
-        } catch(\TypeError $e) {
-            $this->assertStringContainsString('Argument #1 ($input) must be of type Domain\Auth\DTOs\RegisterUserDTO', $e->getMessage());
-        }
-    }
+test('valid register user', function () {
+    $result = $this->registerUser->exec(
+        $this->registerUserDTO
+    );
 
-    public function testValidRegisterUser()
-    {
-        $result = $this->registerUser->exec(
-            $this->registerUserDTO
-        );
+    expect($result)->toBe(['message' => 'User registered']);
+});
 
-        expect($result)->toBe(['message' => 'User registered']);
-    }
-}

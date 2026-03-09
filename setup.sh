@@ -9,7 +9,7 @@ until docker-compose exec db mysqladmin ping -h"localhost" --silent; do
 done
 
 docker-compose exec app composer install
-docker-compose exec app php artisan passport:keys
+docker-compose exec app php artisan passport:keys --force
 docker-compose exec app chmod 644 storage/oauth-private.key storage/oauth-public.key
 docker-compose exec app chown -R www-data:www-data storage/
 

@@ -22,7 +22,7 @@ wait-db:
 
 boot-environment:
 	@docker-compose exec app composer install
-	@docker-compose exec app php artisan passport:keys
+	@docker-compose exec app php artisan passport:keys --force
 
 migrate:
 	@echo "📌 Rodando as migrações..."
