@@ -9,7 +9,7 @@ Read this before touching `domain/` or `app/`. Every rule below has a consequenc
 
 ## Mental model: driver ports yes, driven ports no
 
-Hexagonal architecture applied only as far as it pays for itself. Every use case is an `Action` implementing a `Contract`, and callers depend on the contract. But actions talk to Eloquent, Passport and facades directly — there is no repository and no persistence abstraction. Do not propose repositories or driven ports.
+Hexagonal architecture applied only as far as it pays for itself. A **driver port** (input) is the interface the outside drives the app through — a use case; the app implements it. A **driven port** (output) is the interface the domain *owns and calls* to reach an external resource (DB, third-party HTTP, queue); an adapter implements it. Here every use case is an `Action` implementing a `Contract` (driver port), and callers depend on the contract. But actions talk to Eloquent, Passport and facades directly — no driven port, no repository, no persistence abstraction. Do not propose them. If persistence ever needed a driven port, the port would go in `Contracts/` and its adapter **inside the domain**, e.g. `domain/<Domain>/Repositories/`.
 
 ```php
 // Caller depends on the contract, never on the concrete class.
@@ -32,8 +32,9 @@ domain/<Domain>/
 ├── Actions/     implementations: class X implements XContract
 ├── DTOs/        input (validates) and output (serializes), extends Data
 ├── Exceptions/  domain exceptions + the <Domain>ErrorCode enum
-├── Providers/   <Domain>DomainServiceProvider with public array $bindings
+├── Providers/   one or more *ServiceProvider with the domain's public array $bindings
 ├── Support/     internal collaborators, no port (e.g. PassportTokenIssuer)
+├── Repositories/ driven-port adapters, only if persistence is ever abstracted (not used today)
 └── Tests/{Unit,Feature}/
 ```
 
@@ -75,7 +76,7 @@ final class LoginDTO extends Data
 
 ## Bindings live in the domain
 
-Each domain declares its own bindings in its provider, discovered by glob (`domain/*/Providers/*ServiceProvider.php`). If you find yourself opening `AppServiceProvider` to register a bind, you stopped in the wrong place.
+Each domain declares its own bindings in its `Providers/` directory; the glob (`domain/*/Providers/*ServiceProvider.php`) discovers every `*ServiceProvider` there, so a domain may have more than one. If you find yourself opening `AppServiceProvider` to register a bind, you stopped in the wrong place.
 
 ```php
 class AuthDomainServiceProvider extends ServiceProvider
@@ -86,28 +87,33 @@ class AuthDomainServiceProvider extends ServiceProvider
 }
 ```
 
-## Every error carries a stable code
+## Every error carries an opaque numeric code
 
-Every error response has the same shape; only 422 adds `errors`. Domain codes are a string enum in `domain/<Domain>/Exceptions/<Domain>ErrorCode.php`, all prefixed (`AUTH_`); general codes live in `GeneralErrorCode`. An exception joins the contract by implementing `Domain\Shared\Contracts\HasErrorCode`. The `code` is public contract; the `message` is human and may change.
+Every error response has the same shape; only 422 adds `errors`. Domain codes are an `int` enum in `domain/<Domain>/Exceptions/<Domain>ErrorCode.php`, in a reserved range (Auth 1100-1199); general codes live in `GeneralErrorCode` (1000-1099). Each case has `description()` — the real meaning, for logs and developers — and `publicMessage()` — the only text the client sees, kept generic so a raw response reveals nothing (every auth failure answers the same `Authentication failed`). An exception joins the contract by implementing `Domain\Shared\Contracts\HasErrorCode` (`errorCode(): int`, `httpStatus(): int`). The number is public contract; a front maps it to its own copy.
 
 ```php
-enum AuthErrorCode: string
+enum AuthErrorCode: int
 {
-    case InvalidCredentials = 'AUTH_INVALID_CREDENTIALS';
+    case InvalidCredentials = 1101;
 
-    public function description(): string
+    public function description(): string    // internal: logs, tests
     {
         return match ($this) {
             self::InvalidCredentials => 'The email or the password is wrong',
         };
     }
+
+    public function publicMessage(): string  // on the wire: says nothing specific
+    {
+        return 'Authentication failed';
+    }
 }
-// wire: { "code": "AUTH_INVALID_CREDENTIALS", "message": "Verify your credentials" }
+// wire: { "code": 1101, "message": "Authentication failed" }
 ```
 
 ## Error-handling invariants (do not undo)
 
-`AUTH_INVALID_CREDENTIALS` never distinguishes an unknown email from a wrong password (distinguishing enables account enumeration). A 500 never echoes the exception message (it may hold a query or an API key). The `Handler` must forward `HttpExceptionInterface` headers (the 429 carries `Retry-After` on itself) and must delegate to `$e->render($request)` when present, or Passport's `/oauth/*` errors become `INTERNAL_ERROR 500`.
+The client only ever sees `publicMessage()`; the exception's own message never reaches the wire, so a wrong password and an unknown email are indistinguishable (no enumeration), and a 500 never echoes a query or an API key. The `Handler` must forward `HttpExceptionInterface` headers (the 429 carries `Retry-After` on itself) and must delegate to `$e->render($request)` when present, or Passport's `/oauth/*` errors become code 1000 with 500.
 
 ```php
 // Handler: delegate first, classify second.

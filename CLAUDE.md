@@ -23,7 +23,7 @@ If the task touches application code, at least one applies. When in doubt, read 
 
 ## Driver ports yes, driven ports no
 
-Every use case is an `Action` implementing a `Contract`, and callers depend on the contract. But actions use Eloquent, Passport and facades directly — no repository, no persistence abstraction. This trades domain isolation for simple queries. Do not propose repositories.
+A driver port (input) is the interface the outside drives the app through; a driven port (output) is the interface the domain owns to reach an external resource, implemented by an adapter. Every use case is an `Action` implementing a `Contract` (driver port), and callers depend on the contract. But actions use Eloquent, Passport and facades directly — no driven port, no repository, no persistence abstraction. This trades domain isolation for simple queries. Do not propose repositories; if one were ever added, its adapter lives inside the domain (e.g. `domain/<X>/Repositories/`).
 
 ```php
 public function __construct(private readonly LoginContract $loginAction) {}   // depends on the port
@@ -50,7 +50,7 @@ final class RegisterUserDTO extends Data {
 
 ## Bindings live in the domain
 
-Each domain has a `<X>DomainServiceProvider` with `public array $bindings`, discovered by glob. Adding a domain never requires editing `app/`.
+Each domain declares its bindings in its `Providers/` directory (`public array $bindings`); the glob discovers every `*ServiceProvider` there, so a domain may have more than one. Adding a domain never requires editing `app/`.
 
 ```php
 class AuthDomainServiceProvider extends ServiceProvider {
@@ -66,12 +66,12 @@ One method = one action call. No `Auth::user()`, `App\Models\*`, `Laravel\Passpo
 public function me(): UserDTO { return $this->getAuthenticatedUserAction->handle(); }
 ```
 
-## Every error carries a stable code
+## Every error carries an opaque numeric code
 
-String enum per domain, prefixed (`AUTH_`). The `code` is public contract; the `message` is human and may change.
+Int enum per domain, in ranges (Auth 1100-1199, general 1000-1099). `description()` names the real failure for logs; `publicMessage()` is what the client gets, kept generic so a raw response never spells the failure out (all auth failures answer `Authentication failed`). The number is public contract; a front maps it to its own UX copy.
 
 ```php
-// { "code": "AUTH_INVALID_CREDENTIALS", "message": "Verify your credentials" }
+// { "code": 1101, "message": "Authentication failed" }   // 1101 = AuthErrorCode::InvalidCredentials
 ```
 
 ## Auth uses the password grant
@@ -126,6 +126,4 @@ PassportSeeder                     seeds layer@gmail.com with a known password (
 CACHE_DRIVER=file                  with >1 replica the rate limit becomes limit × replicas
 AUTH_PERSONAL_ACCESS_TOKEN_DAYS    dead config: no createToken() remains in the code
 Domain\Shared\Helpers\Queue        the most complex file in the repo, has no test
-routes/web.php                     serves HTML in an app the Handler treats as API-only
-orphan code                        ProcessUserJob, App\Models\Product, Middleware\Authenticate
 ```

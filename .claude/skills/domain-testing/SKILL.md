@@ -10,7 +10,7 @@ description: Testing rules for laravel-layer — Pest in Given/When/Then, per-do
 Not in `tests/`. `Unit` never touches the DB or HTTP; `Feature` does. `tests/` holds only infrastructure (`Pest.php`, `TestCase.php`, `CreatesApplication.php`), and `phpunit.xml` finds tests by glob.
 
 ```
-domain/<Domain>/Tests/Unit/      DTOs, value objects, enums
+domain/<Domain>/Tests/Unit/      DTOs, enums
 domain/<Domain>/Tests/Feature/   actions, routes
 ```
 
@@ -109,7 +109,7 @@ $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.1']);   // own throttle buc
 
 ```php
 $this->actingAs($user);                       // no real access token
-$this->postJson('/logout')->assertStatus(401)->assertJson(['code' => 'AUTH_UNAUTHENTICATED']);
+$this->postJson('/logout')->assertStatus(401)->assertJson(['code' => 1100]);
 ```
 
 ## Never let a test lie

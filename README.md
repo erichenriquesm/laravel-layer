@@ -15,7 +15,7 @@ Projeto base Laravel com **Docker**, **autenticação (Passport)**, **arquitetur
 
 ## 🧩 Arquitetura: ports & adapters, de forma pragmática
 
-A ideia central da arquitetura hexagonal é que a regra de negócio não conheça o mundo externo. Quem chama de fora entra por um **driver port** (porta de entrada); quem é chamado de fora sai por um **driven port** (porta de saída). Aqui essa ideia é aplicada **até onde ela paga o próprio custo** — e o README é explícito sobre onde ela para.
+A ideia central da arquitetura hexagonal é que a regra de negócio não conheça o mundo externo. Quem chama de fora entra por um **driver port** (porta de entrada), uma interface que a aplicação implementa. Quando a regra de negócio precisa alcançar um recurso externo — banco, HTTP de terceiro, fila —, ela o enxerga através de um **driven port** (porta de saída): uma interface que o próprio domínio define e chama, e que um **adapter** implementa. Aqui essa ideia é aplicada **até onde ela paga o próprio custo** — e o README é explícito sobre onde ela para.
 
 ### O que existe: driver ports
 
@@ -27,7 +27,7 @@ domain/Auth/
 ├── Actions/             ← implementações (Login, RegisterUser)
 ├── DTOs/                ← entrada e saída (LoginDTO, TokenPairDTO, UserDTO…)
 ├── Exceptions/          ← exceções de domínio (InvalidCredentialsException)
-├── Providers/           ← liga contract → action
+├── Providers/           ← um ou mais ServiceProviders com os bindings do domínio
 └── Tests/{Unit,Feature}
 ```
 
@@ -54,11 +54,11 @@ $this->mock(LoginContract::class, function (MockInterface $mock) {
 
 Isso é uma escolha, não um esquecimento. O preço de um driven port de banco em CRUD é alto — some a expressividade do query builder, aparecem DTOs de credencial, hasher e emissor de token — e o retorno (trocar o banco, testar sem ele) raramente se realiza. O trade-off aceito é: **queries simples, domínio que precisa de banco para ser testado.** Por isso os testes de action ficam em `Tests/Feature`, não em `Tests/Unit`.
 
-Se um dia a persistência precisar ser abstraída, o caminho é criar os contracts de saída em `domain/<Domínio>/Contracts/` e os adapters fora de `domain/`.
+Se um dia a persistência precisar ser abstraída, o caminho é declarar o driven port em `domain/<Domínio>/Contracts/` e implementá-lo com um adapter **dentro do próprio domínio** — por exemplo em `domain/<Domínio>/Repositories/`. A action passa a depender do port, não do Eloquent.
 
-### Bindings: um provider por domínio
+### Bindings: no provider do domínio
 
-Não existe arquivo central de bindings. Cada domínio declara os seus no próprio provider, usando o array `$bindings` nativo do Laravel:
+Não existe arquivo central de bindings. Cada domínio declara os seus no seu diretório `Providers/`, usando o array `$bindings` nativo do Laravel:
 
 ```php
 class AuthDomainServiceProvider extends ServiceProvider
@@ -70,7 +70,7 @@ class AuthDomainServiceProvider extends ServiceProvider
 }
 ```
 
-O `App\Providers\DomainServiceProvider` descobre esses providers por convenção (`domain/*/Providers/*ServiceProvider.php`) e os registra. **Adicionar um domínio não exige editar nada dentro de `app/`.**
+O `App\Providers\DomainServiceProvider` descobre por convenção qualquer `*ServiceProvider` em `domain/*/Providers/` e o registra — um domínio pode ter mais de um. **Adicionar um domínio não exige editar nada dentro de `app/`.**
 
 ### Criando um novo domínio
 
@@ -89,48 +89,48 @@ Rode `composer dump-autoload` e pronto — o provider é descoberto sozinho.
 
 ### Contrato HTTP
 
-As respostas são os próprios DTOs de saída, sem envelope. Os erros seguem o formato padrão do Laravel.
+As respostas de sucesso são os próprios DTOs de saída, sem envelope. Toda resposta de erro tem a forma `{code, message}` (o `422` acrescenta `errors`), descrita em **Códigos de erro** abaixo.
 
 | Rota | Sucesso | Erro |
 |---|---|---|
-| `POST /register` | `201` + `{id, name, email}` | `422` `{message, errors}` |
-| `POST /login` | `200` + `{access_token, refresh_token, expires_in, token_type}` | `401` `{message}` / `422` |
-| `POST /refresh` | `200` + mesmo par, rotacionado | `401` `{message}` / `422` |
-| `POST /logout` | `204` | `401` |
-| `GET /me` | `200` + `{id, name, email}` | `401` |
+| `POST /register` | `201` + `{id, name, email}` | `422` `{code, message, errors}` |
+| `POST /login` | `200` + `{access_token, refresh_token, expires_in, token_type}` | `401` `{code, message}` / `422` |
+| `POST /refresh` | `200` + mesmo par, rotacionado | `401` `{code, message}` / `422` |
+| `POST /logout` | `204` | `401` `{code, message}` |
+| `GET /me` | `200` + `{id, name, email}` | `401` `{code, message}` |
 
 A validação vive nos atributos do DTO de entrada, não em form requests. O `Handler` força JSON em qualquer resposta de erro, já que a aplicação só expõe API.
 
 ### Códigos de erro
 
-**Toda** resposta de erro tem a mesma forma, e sempre traz um `code` estável. O cliente decide o que fazer olhando só para ele — nunca para a mensagem, que é humana e pode mudar, nem só para o status, que é ambíguo (`401` tanto pode ser "senha errada" quanto "token expirado", e a reação é diferente).
+**Toda** resposta de erro tem a mesma forma, e sempre traz um `code` numérico estável. O cliente decide o que fazer olhando só para ele — nunca para a mensagem, nem só para o status, que é ambíguo (`401` tanto pode ser "senha errada" quanto "token expirado", e a reação é diferente).
+
+O número é **opaco de propósito**: a resposta não deve dizer a quem ataca o que exatamente falhou. A `message` que acompanha é genérica (todo erro de autenticação responde `Authentication failed`); o significado real de cada código vive no enum, para log interno. O front mantém o seu próprio mapa `código → texto` para exibir ao usuário.
 
 ```json
-{ "code": "AUTH_INVALID_CREDENTIALS", "message": "Verify your credentials" }
+{ "code": 1101, "message": "Authentication failed" }
 ```
 
 Só o `422` acrescenta um campo, `errors`, com a lista de campos inválidos.
 
 | Código | Status | Quando |
 |---|---|---|
-| `AUTH_UNAUTHENTICATED` | `401` | Sem access token, ou ele expirou/foi revogado. **Chame `/refresh`.** |
-| `AUTH_INVALID_CREDENTIALS` | `401` | Email ou senha errados no `/login`. Não tente refresh. |
-| `AUTH_INVALID_REFRESH_TOKEN` | `401` | Refresh token inválido, expirado ou já usado. **Mande para o login.** |
-| `VALIDATION_FAILED` | `422` | Payload inválido. Veja `errors`. |
-| `RATE_LIMIT_EXCEEDED` | `429` | Respeite o header `Retry-After`. |
-| `NOT_FOUND` | `404` | Rota ou recurso inexistente. |
-| `METHOD_NOT_ALLOWED` | `405` | Método HTTP errado para a rota. |
-| `INTERNAL_ERROR` | `500` | Falha no servidor. |
+| `1100` | `401` | Sem access token, ou ele expirou/foi revogado. **Chame `/refresh`.** |
+| `1101` | `401` | Email ou senha errados no `/login`. Não tente refresh. |
+| `1102` | `401` | Refresh token inválido, expirado ou já usado. **Mande para o login.** |
+| `1003` | `422` | Payload inválido. Veja `errors`. |
+| `1004` | `429` | Respeite o header `Retry-After`. |
+| `1001` | `404` | Rota ou recurso inexistente. |
+| `1002` | `405` | Método HTTP errado para a rota. |
+| `1000` | `500` | Falha no servidor. |
 
-Repare que `AUTH_UNAUTHENTICATED` e `AUTH_INVALID_REFRESH_TOKEN` são ambos `401` e pedem reações **opostas**: o primeiro manda renovar, o segundo manda deslogar. É exatamente por isso que o código existe.
+Repare que `1100` e `1102` são ambos `401` e pedem reações **opostas**: o primeiro manda renovar, o segundo manda deslogar. É exatamente por isso que o código existe separado do status. Os três `401` de autenticação compartilham a **mesma** `message` — só o número os distingue, e só quem tem o catálogo o interpreta.
 
-Os catálogos são enums: `Domain\Auth\Exceptions\AuthErrorCode` (tudo prefixado `AUTH_`) e `Domain\Shared\Exceptions\GeneralErrorCode` (sem prefixo, pois nenhum domínio os possui). Cada caso tem um `description()`. Um domínio novo declara o seu próprio enum com o seu prefixo, e uma exceção entra no contrato implementando `Domain\Shared\Contracts\HasErrorCode`.
+Os catálogos são enums `int`: `Domain\Auth\Exceptions\AuthErrorCode` (faixa 1100-1199) e `Domain\Shared\Exceptions\GeneralErrorCode` (1000-1099). Cada caso tem `description()` (o significado real, para log) e `publicMessage()` (o texto seguro que vai ao cliente). Um domínio novo declara o seu próprio enum na sua faixa, e uma exceção entra no contrato implementando `Domain\Shared\Contracts\HasErrorCode`.
 
-Dois cuidados embutidos no `Handler`:
+Cuidados embutidos no `Handler`:
 
-**`AUTH_INVALID_CREDENTIALS` não distingue email inexistente de senha errada.** Distinguir permitiria enumerar quais emails estão cadastrados.
-
-**O `500` nunca ecoa a mensagem da exceção.** Ela pode carregar uma query, um caminho de arquivo ou uma chave de API. Só com `APP_DEBUG=true` a resposta ganha um bloco `debug` com a classe e a linha.
+**O cliente só recebe `publicMessage()`.** A mensagem real da exceção nunca chega ao fio, então um email inexistente e uma senha errada são indistinguíveis (sem enumeração de contas), e um `500` nunca ecoa uma query, um caminho de arquivo ou uma chave de API. Só com `APP_DEBUG=true` a resposta ganha um bloco `debug` com a classe e a linha — nunca a mensagem.
 
 ---
 
@@ -215,7 +215,7 @@ Depois disso, a API estará no ar (rotas em `routes/auth.php`).
 # Todos os testes
 docker compose exec app php artisan test
 
-# Só os testes rápidos (DTOs e value objects): sem query nem request HTTP
+# Só os testes rápidos (DTOs e enums): sem query nem request HTTP
 docker compose exec app php artisan test --testsuite=Unit
 ```
 
