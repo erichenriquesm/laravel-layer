@@ -6,14 +6,13 @@ use App\Models\User;
 use Domain\Auth\Contracts\RegisterUserContract;
 use Domain\Auth\DTOs\RegisterUserDTO;
 use Domain\Auth\DTOs\UserDTO;
-use Domain\Shared\DomainTypes\Email;
 use Illuminate\Support\Facades\Hash;
 
 it('persists the user and returns the UserDTO of the created resource', function () {
     // Given
     $dto = new RegisterUserDTO(
         name: 'Jane Doe',
-        email: new Email('new-user@example.com'),
+        email: 'new-user@example.com',
         password: 'secret123',
     );
 
@@ -32,7 +31,7 @@ it('stores the password hashed, never in plain text', function () {
     // Given
     $dto = new RegisterUserDTO(
         name: 'Jane Doe',
-        email: new Email('hash-check@example.com'),
+        email: 'hash-check@example.com',
         password: 'secret123',
     );
 

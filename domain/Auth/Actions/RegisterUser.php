@@ -16,7 +16,7 @@ class RegisterUser implements RegisterUserContract
     {
         $user = User::create([
             'name'     => $input->name,
-            'email'    => $input->email->getValue(),
+            'email'    => $input->email,
             'password' => Hash::make($input->password),
         ]);
 
