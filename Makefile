@@ -1,4 +1,4 @@
-.PHONY: setup up down wait-db migrate seed
+.PHONY: setup up down wait-db migrate seed test
 
 setup: up wait-db boot-environment migrate seed
 	@echo "✅ Setup concluído!"
@@ -31,3 +31,6 @@ migrate:
 seed:
 	@echo "📌 Configurando o Passport..."
 	@docker-compose exec app php artisan db:seed --class=PassportSeeder
+
+test:
+	@docker-compose exec -T app php artisan test $(ARGS)
