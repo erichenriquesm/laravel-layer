@@ -7,16 +7,16 @@ namespace Domain\Auth\Exceptions;
 use Domain\Shared\Contracts\HasErrorCode;
 use RuntimeException;
 
-final class InvalidRefreshTokenException extends RuntimeException implements HasErrorCode
+final class UnauthenticatedException extends RuntimeException implements HasErrorCode
 {
-    public function __construct(string $message = 'The refresh token is invalid, expired or already used')
+    public function __construct(string $message = 'Unauthenticated')
     {
         parent::__construct($message);
     }
 
     public function errorCode(): string
     {
-        return AuthErrorCode::InvalidRefreshToken->value;
+        return AuthErrorCode::Unauthenticated->value;
     }
 
     public function httpStatus(): int

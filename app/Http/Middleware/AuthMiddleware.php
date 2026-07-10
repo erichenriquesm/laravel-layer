@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use Closure;
+use Domain\Auth\Exceptions\UnauthenticatedException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
@@ -16,9 +17,10 @@ class AuthMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if(!Auth::check()){
-            abort(401);
+        if (! Auth::check()) {
+            throw new UnauthenticatedException();
         }
+
         return $next($request);
     }
 }

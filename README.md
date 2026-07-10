@@ -101,6 +101,37 @@ As respostas são os próprios DTOs de saída, sem envelope. Os erros seguem o f
 
 A validação vive nos atributos do DTO de entrada, não em form requests. O `Handler` força JSON em qualquer resposta de erro, já que a aplicação só expõe API.
 
+### Códigos de erro
+
+**Toda** resposta de erro tem a mesma forma, e sempre traz um `code` estável. O cliente decide o que fazer olhando só para ele — nunca para a mensagem, que é humana e pode mudar, nem só para o status, que é ambíguo (`401` tanto pode ser "senha errada" quanto "token expirado", e a reação é diferente).
+
+```json
+{ "code": "AUTH_INVALID_CREDENTIALS", "message": "Verify your credentials" }
+```
+
+Só o `422` acrescenta um campo, `errors`, com a lista de campos inválidos.
+
+| Código | Status | Quando |
+|---|---|---|
+| `AUTH_UNAUTHENTICATED` | `401` | Sem access token, ou ele expirou/foi revogado. **Chame `/refresh`.** |
+| `AUTH_INVALID_CREDENTIALS` | `401` | Email ou senha errados no `/login`. Não tente refresh. |
+| `AUTH_INVALID_REFRESH_TOKEN` | `401` | Refresh token inválido, expirado ou já usado. **Mande para o login.** |
+| `VALIDATION_FAILED` | `422` | Payload inválido. Veja `errors`. |
+| `RATE_LIMIT_EXCEEDED` | `429` | Respeite o header `Retry-After`. |
+| `NOT_FOUND` | `404` | Rota ou recurso inexistente. |
+| `METHOD_NOT_ALLOWED` | `405` | Método HTTP errado para a rota. |
+| `INTERNAL_ERROR` | `500` | Falha no servidor. |
+
+Repare que `AUTH_UNAUTHENTICATED` e `AUTH_INVALID_REFRESH_TOKEN` são ambos `401` e pedem reações **opostas**: o primeiro manda renovar, o segundo manda deslogar. É exatamente por isso que o código existe.
+
+Os catálogos são enums: `Domain\Auth\Exceptions\AuthErrorCode` (tudo prefixado `AUTH_`) e `Domain\Shared\Exceptions\GeneralErrorCode` (sem prefixo, pois nenhum domínio os possui). Cada caso tem um `description()`. Um domínio novo declara o seu próprio enum com o seu prefixo, e uma exceção entra no contrato implementando `Domain\Shared\Contracts\HasErrorCode`.
+
+Dois cuidados embutidos no `Handler`:
+
+**`AUTH_INVALID_CREDENTIALS` não distingue email inexistente de senha errada.** Distinguir permitiria enumerar quais emails estão cadastrados.
+
+**O `500` nunca ecoa a mensagem da exceção.** Ela pode carregar uma query, um caminho de arquivo ou uma chave de API. Só com `APP_DEBUG=true` a resposta ganha um bloco `debug` com a classe e a linha.
+
 ---
 
 ## 🔑 Tokens: expiração, rotação e logout
