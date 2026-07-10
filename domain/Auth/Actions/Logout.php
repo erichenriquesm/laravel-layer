@@ -8,34 +8,36 @@ use App\Models\User;
 use Domain\Auth\Contracts\LogoutContract;
 use Domain\Auth\Exceptions\UnauthenticatedException;
 use Illuminate\Support\Facades\Auth;
-use Laravel\Passport\RefreshTokenRepository;
-use Laravel\Passport\Token;
-use Laravel\Passport\TokenRepository;
+use Laravel\Passport\AccessToken;
+use Laravel\Passport\RefreshToken;
 
 class Logout implements LogoutContract
 {
-    public function __construct(
-        private readonly TokenRepository $tokens,
-        private readonly RefreshTokenRepository $refreshTokens,
-    ) {}
-
     /**
      * Revoking the access token alone would leave its refresh token usable, which would hand a
      * brand new access token to whoever holds it.
+     *
+     * Passport 13 resolves a bearer request to an AccessToken value object (not the Token model)
+     * and revokes through it.
      */
     public function handle(): void
     {
-        $accessTokenId = (string) $this->currentToken()->getKey();
+        $token = $this->currentAccessToken();
 
-        $this->tokens->revokeAccessToken($accessTokenId);
-        $this->refreshTokens->revokeRefreshTokensByAccessTokenId($accessTokenId);
+        RefreshToken::where('access_token_id', $token->oauth_access_token_id)
+            ->where('revoked', false)
+            ->get()
+            ->each
+            ->revoke();
+
+        $token->revoke();
     }
 
     /**
-     * token() also answers a TransientToken, which carries no id to revoke: the request was
-     * authenticated by session rather than by a bearer token, so there is nothing to log out of.
+     * token() answers a TransientToken for a session-authenticated request, which carries no id to
+     * revoke: there is nothing to log out of, so the request is treated as unauthenticated.
      */
-    private function currentToken(): Token
+    private function currentAccessToken(): AccessToken
     {
         $user = Auth::user();
 
@@ -45,7 +47,7 @@ class Logout implements LogoutContract
 
         $token = $user->token();
 
-        if (! $token instanceof Token) {
+        if (! $token instanceof AccessToken) {
             throw new UnauthenticatedException();
         }
 

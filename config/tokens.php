@@ -20,4 +20,18 @@ return [
 
     'refresh_token_days' => (int) env('AUTH_REFRESH_TOKEN_DAYS', 14),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Password Grant Client Secret
+    |--------------------------------------------------------------------------
+    |
+    | Passport 13 hashes client secrets, so the plain text cannot be read back
+    | from the database. The seeder stores the hash of this value and the token
+    | issuer sends this plain text in the grant request. Override it in
+    | production; the default only exists so a fresh clone works locally.
+    |
+    */
+
+    'password_client_secret' => env('PASSPORT_PASSWORD_CLIENT_SECRET', 'local-password-grant-secret'),
+
 ];

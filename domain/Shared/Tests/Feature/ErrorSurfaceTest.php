@@ -20,9 +20,9 @@ it('lets Passport render its own OAuth error, not our envelope', function () {
 
     // Then
     // the RFC-shaped OAuth error, not our {code, message} — reshaping it would break OAuth clients
+    $response->assertStatus(400);
     expect($body)->toHaveKey('error');
     expect($body)->not->toHaveKey('code');
-    expect($response->status())->not->toBe(500);
 });
 
 it('answers invalid credentials with the auth code', function () {
