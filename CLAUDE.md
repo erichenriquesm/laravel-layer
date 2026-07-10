@@ -23,7 +23,7 @@ If the task touches application code, at least one applies. When in doubt, read 
 
 ## Driver ports yes, driven ports no
 
-A driver port (input) is the interface the outside drives the app through; a driven port (output) is the interface the domain owns to reach an external resource, implemented by an adapter. Every use case is an `Action` implementing a `Contract` (driver port), and callers depend on the contract. Persistence uses Eloquent, Passport and facades directly, and background work uses Laravel's native queued Jobs (`app/Jobs`, dispatched onto the `rabbitmq` connection) — no repository, no driven port; do not propose one. Abstracting CRUD or "enqueue work" behind an output port does not pay for itself here.
+A driver port (input) is the interface the outside drives the app through; a driven port (output) is the interface the domain owns to reach an external resource, implemented by an adapter. Every use case is an `Action` implementing a `Contract` (driver port), and callers depend on the contract. Persistence uses Eloquent, Passport and facades directly, and background work is deferred by raising a domain event that a queued listener handles — the action calls the injected `Illuminate\Contracts\Events\Dispatcher`, never a Job or a queue, so the rule announces a fact and stays ignorant of the mechanism. No repository, no driven port; do not propose one. `Dispatcher` is a framework contract resolved by DI, not a domain-owned output port.
 
 ```php
 public function __construct(private readonly LoginContract $loginAction) {}   // depends on the port

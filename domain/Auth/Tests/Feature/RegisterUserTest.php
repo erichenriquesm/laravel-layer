@@ -6,6 +6,9 @@ use App\Models\User;
 use Domain\Auth\Contracts\RegisterUserContract;
 use Domain\Auth\DTOs\RegisterUserDTO;
 use Domain\Auth\DTOs\UserDTO;
+use Domain\Auth\Events\UserRegistered;
+use Domain\Auth\Listeners\SendWelcomeNotification;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
 
 it('persists the user and returns the UserDTO of the created resource', function () {
@@ -25,6 +28,27 @@ it('persists the user and returns the UserDTO of the created resource', function
     expect($result->email)->toBe('new-user@example.com');
     expect($result->id)->toBeGreaterThan(0);
     $this->assertDatabaseHas('users', ['email' => 'new-user@example.com']);
+});
+
+it('announces the UserRegistered fact instead of dispatching background work itself', function () {
+    // Given
+    Event::fake([UserRegistered::class]);
+    $dto = new RegisterUserDTO(name: 'Jane Doe', email: 'event@example.com', password: 'secret123');
+
+    // When
+    port(RegisterUserContract::class)->handle($dto);
+
+    // Then
+    $userId = User::where('email', 'event@example.com')->value('id');
+    Event::assertDispatched(UserRegistered::class, fn (UserRegistered $e): bool => $e->userId === $userId);
+});
+
+it('wires the queued welcome listener to the fact in the domain provider', function () {
+    // Given
+    Event::fake();
+
+    // Then
+    Event::assertListening(UserRegistered::class, SendWelcomeNotification::class);
 });
 
 it('stores the password hashed, never in plain text', function () {

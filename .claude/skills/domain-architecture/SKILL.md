@@ -11,7 +11,7 @@ Read this before touching `domain/` or `app/`. Every rule below has a consequenc
 
 Hexagonal architecture applied only as far as it pays for itself. A **driver port** (input) is the interface the outside drives the app through — a use case; the app implements it. A **driven port** (output) is the interface the domain *owns and calls* to reach an external resource; an adapter implements it. Here every use case is an `Action` implementing a `Contract` (driver port), and callers depend on the contract.
 
-Persistence stays Eloquent-direct, and background work uses Laravel's native queued Jobs (`app/Jobs`, dispatched onto the `rabbitmq` connection) — **no repository, no driven port; do not propose one.** Abstracting "enqueue work" behind an output port was tried and removed: the framework already serializes, delivers and retries a Job, so the port bought nothing but a hand-rolled dispatcher to maintain. Abstracting CRUD does not pay for itself either. Reach for a driven port only if a real second implementation actually appears.
+Persistence stays Eloquent-direct, and background work is deferred by raising a domain event that a queued listener handles (the action calls the injected `Illuminate\Contracts\Events\Dispatcher`, never a Job or a queue) — **no repository, no driven port; do not propose one.** The queue was once wrapped in an output port (`MessageQueue`); it was removed because the framework already serializes, delivers and retries, so the port only added a hand-rolled dispatcher to maintain. Abstracting CRUD does not pay for itself either. Reach for a driven port only if a real second implementation actually appears.
 
 ```php
 // Caller depends on the contract, never on the concrete class.
@@ -33,19 +33,30 @@ domain/<Domain>/
 ├── Contracts/   driver ports: interfaces with handle()
 ├── Actions/     implementations: class X implements XContract
 ├── DTOs/        input (validates) and output (serializes), extends Data
+├── Events/      domain facts (e.g. UserRegistered), raised by actions
+├── Listeners/   ShouldQueue reactions to events — the background work
 ├── Exceptions/  domain exceptions + the <Domain>ErrorCode enum
-├── Providers/   one or more *ServiceProvider with the domain's public array $bindings
+├── Providers/   one or more *ServiceProvider with the domain's public array $bindings (+ event wiring in boot())
 ├── Support/     internal collaborators, no port (e.g. PassportTokenIssuer)
 └── Tests/{Unit,Feature}/
 ```
 
-## Background work is a native queued Job
+## Background work: raise a fact, a queued listener handles it
 
-No custom queue layer. A deferred task is a `ShouldQueue` Job in `app/Jobs`, dispatched with `Job::dispatch(...)` onto the default connection (`rabbitmq`, see `QUEUE_CONNECTION`) and processed by `php artisan queue:work rabbitmq`. `app/Jobs/ExampleJob.php` is the copy-me template: it sets `$tries`/`$backoff` and shows a broker-level retry via `release()` (RabbitMQ redelivers the released message; `attempts()` bounds it). Do not reintroduce a `MessageQueue` port, a `DeferredCall`, or a hand-rolled worker command — the framework owns serialization, delivery and retry.
+The business rule must not know about deferral. An action does **not** dispatch a Job; it announces a **domain event** — a fact — through the injected `Illuminate\Contracts\Events\Dispatcher`, and a `ShouldQueue` **listener** does the deferred work. The producer never names the listener, the queue or the broker; the only link is the event→listener mapping, registered by the domain (not `app/`).
+
+- Event: `domain/<Domain>/Events/<Fact>.php` (e.g. `UserRegistered`) — a plain data-carrying class, `use Dispatchable`.
+- Listener: `domain/<Domain>/Listeners/<Reaction>.php` implementing `ShouldQueue` — runs on the default connection (`rabbitmq`, see `QUEUE_CONNECTION`), processed by `php artisan queue:work rabbitmq`. It sets `$tries`/`$backoff` and can requeue a transient failure with `release()` (RabbitMQ redelivers; `attempts()` bounds it).
+- Wiring: `Event::listen(...)` in the domain's `*ServiceProvider::boot()`. `Domain\Auth` is the worked example (`RegisterUser` → `UserRegistered` → `SendWelcomeNotification`).
+
+Do not dispatch a Job straight from an action, and do not reintroduce a `MessageQueue` port or a hand-rolled worker — the framework owns serialization, delivery and retry.
 
 ```php
-ExampleJob::dispatch($productId);                 // producer: no broker named beyond the connection
-$this->release($this->backoff);                   // inside handle(): hand back for a bounded retry
+// action: announce the fact and move on — no Job, no queue named
+$this->events->dispatch(new UserRegistered($user->id));
+
+// queued listener's handle(): hand back for a bounded retry on a transient failure
+$this->release($this->backoff);
 ```
 
 ## The controller only translates HTTP

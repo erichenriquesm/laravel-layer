@@ -9,7 +9,7 @@ Projeto base Laravel com **Docker**, **autenticação (Passport)**, **arquitetur
 - **DTOs**: `spatie/laravel-data` fazendo validação de entrada (no lugar de form requests) e serialização de saída (no lugar de resources)
 - **Testes**: Pest em `domain/<Domínio>/Tests/{Unit,Feature}`, escritos em Given/When/Then
 - **Dev**: Docker Compose, Makefile e scripts `.sh` para setup idempotente (incl. `passport:keys --force`)
-- **Filas**: containers **Redis** e **RabbitMQ**; Jobs nativos (`app/Jobs`, `ShouldQueue`) despachados na conexão `rabbitmq` e processados por `php artisan queue:work rabbitmq`
+- **Filas**: containers **Redis** e **RabbitMQ**; trabalho em background por **evento de domínio + listener `ShouldQueue`** na conexão `rabbitmq`, processado por `php artisan queue:work rabbitmq` (a regra não conhece a fila)
 
 ---
 
@@ -50,7 +50,7 @@ $this->mock(LoginContract::class, function (MockInterface $mock) {
 
 ### O que não existe: driven ports
 
-**As actions usam Eloquent, `Auth::attempt()` e o Passport diretamente.** Não há `UserRepositoryContract`, nem repositórios, nem abstração de persistência. O trabalho em background também não passa por um port: é um Job nativo do Laravel (`app/Jobs`, `ShouldQueue`) — o framework já serializa, entrega e reprocessa.
+**As actions usam Eloquent, `Auth::attempt()` e o Passport diretamente.** Não há `UserRepositoryContract`, nem repositórios, nem abstração de persistência. O trabalho em background também não passa por um port: a action levanta um evento de domínio e um listener `ShouldQueue` reage — a regra anuncia um fato, não comanda a fila.
 
 Isso é uma escolha, não um esquecimento. O preço de um driven port de banco em CRUD é alto — some a expressividade do query builder, aparecem DTOs de credencial, hasher e emissor de token — e o retorno (trocar o banco, testar sem ele) raramente se realiza. O trade-off aceito é: **queries simples, domínio que precisa de banco para ser testado.** Por isso os testes de action ficam em `Tests/Feature`, não em `Tests/Unit`.
 
@@ -222,32 +222,49 @@ docker compose exec app php artisan test --testsuite=Unit
 
 ## 📬 Filas: Redis + RabbitMQ
 
-O ambiente já inclui os containers **Redis** (porta 6379) e **RabbitMQ** (AMQP 5672, management 15672). Não há camada de fila própria: trabalho em background é um **Job nativo** do Laravel. A conexão padrão é a `rabbitmq` (`QUEUE_CONNECTION` no `.env`), provida pelo pacote `vladimir-yuldashev/laravel-queue-rabbitmq`; o framework cuida de serializar, entregar e reprocessar o Job. Nenhum driven port no caminho — o produtor só despacha.
+O ambiente já inclui os containers **Redis** (porta 6379) e **RabbitMQ** (AMQP 5672, management 15672). Não há camada de fila própria, e a **regra de negócio não conhece o mecanismo de deferimento**: a action levanta um **evento de domínio** (um fato) e segue; um **listener** `ShouldQueue` faz o trabalho em background. A conexão padrão é a `rabbitmq` (`QUEUE_CONNECTION` no `.env`), provida pelo pacote `vladimir-yuldashev/laravel-queue-rabbitmq`; o framework serializa, entrega e reprocessa. Nenhum driven port no caminho.
 
-### Despachar um Job
+### Levantar um fato
 
-Crie um Job `ShouldQueue` em `app/Jobs` e despache com `dispatch()`. O produtor não nomeia o broker; o Job vai para a conexão padrão. `app/Jobs/ExampleJob.php` é o modelo para copiar:
+A action injeta `Illuminate\Contracts\Events\Dispatcher` e dispara o evento — nunca um Job, nunca a fila. `Domain\Auth` é o exemplo real (`RegisterUser` → `UserRegistered` → `SendWelcomeNotification`):
 
 ```php
-use App\Jobs\ExampleJob;
+use Domain\Auth\Events\UserRegistered;
 
-// enfileira o Job na conexão padrão (rabbitmq)
-ExampleJob::dispatch($productId);
+// dentro da action, depois de criar o usuário:
+$this->events->dispatch(new UserRegistered($user->id));
 ```
 
-Dentro do `handle()`, `$tries`/`$backoff` limitam as tentativas e `release()` devolve a mensagem ao broker para reprocessar depois de uma falha transitória — o RabbitMQ reentrega e `attempts()` conta as entregas, então o requeue é naturalmente limitado por `$tries`:
+O mapeamento evento→listener vive no provider do próprio domínio (nada em `app/`):
 
 ```php
-public function handle(): void
+// AuthDomainServiceProvider::boot()
+Event::listen(UserRegistered::class, SendWelcomeNotification::class);
+```
+
+### O listener faz o trabalho
+
+Um listener `ShouldQueue` roda na conexão padrão (rabbitmq). `$tries`/`$backoff` limitam as tentativas e `release()` devolve ao broker numa falha transitória — o RabbitMQ reentrega e `attempts()` conta as entregas, então o requeue é limitado por `$tries`:
+
+```php
+class SendWelcomeNotification implements ShouldQueue
 {
-    if (! $this->readyToRun()) {
-        // falha transitória → devolve ao broker; depois de $tries vai para failed_jobs
-        $this->release($this->backoff);
+    use InteractsWithQueue;
 
-        return;
+    public int $tries = 3;
+    public int $backoff = 5;
+
+    public function handle(UserRegistered $event): void
+    {
+        if (! $this->readyToRun()) {
+            // falha transitória → devolve ao broker; depois de $tries vai para failed_jobs
+            $this->release($this->backoff);
+
+            return;
+        }
+
+        // ... trabalho (enviar a mensagem de boas-vindas) ...
     }
-
-    // ... trabalho ...
 }
 ```
 

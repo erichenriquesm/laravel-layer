@@ -14,6 +14,9 @@ use Domain\Auth\Contracts\LoginContract;
 use Domain\Auth\Contracts\LogoutContract;
 use Domain\Auth\Contracts\RefreshTokenContract;
 use Domain\Auth\Contracts\RegisterUserContract;
+use Domain\Auth\Events\UserRegistered;
+use Domain\Auth\Listeners\SendWelcomeNotification;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
 class AuthDomainServiceProvider extends ServiceProvider
@@ -28,4 +31,12 @@ class AuthDomainServiceProvider extends ServiceProvider
         RefreshTokenContract::class        => RefreshToken::class,
         RegisterUserContract::class        => RegisterUser::class,
     ];
+
+    /**
+     * The domain owns its own event wiring, so adding a listener never touches app/.
+     */
+    public function boot(): void
+    {
+        Event::listen(UserRegistered::class, SendWelcomeNotification::class);
+    }
 }

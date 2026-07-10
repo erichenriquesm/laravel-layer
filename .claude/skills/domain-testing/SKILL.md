@@ -84,14 +84,20 @@ curl -s -i -X POST http://localhost:81/login -H 'Accept: application/json' \
 # check status, body, and Retry-After / X-RateLimit-* headers
 ```
 
-## Queued jobs: fake for logic, a real worker for integration
+## Background work: assert the fact, unit-test the listener, real worker for integration
 
-A native queued Job is tested without a broker. `Queue::fake()` + `assertPushed` proves the producer dispatches it; calling `handle()` directly proves its control flow — set a mocked underlying `Job` with `setJob()` to drive `attempts()` and assert `release()`. See `domain/Shared/Tests/Unit/ExampleJobTest.php`. The broker itself is exercised out-of-band with a real `php artisan queue:work rabbitmq` run, not in the suite.
+Background work is an event + a queued listener (see the architecture skill), so it splits into three cheap checks, none needing a broker:
+
+- **Producer** raises the fact: `Event::fake([TheEvent::class])`, run the action, `Event::assertDispatched(...)`. Also `Event::assertListening(TheEvent::class, TheListener::class)` pins the domain-provider wiring.
+- **Listener** logic: call `handle($event)` directly — set a mocked underlying `Job` with `setJob()` to drive `attempts()` and assert `release()`. Each branch is mutation-provable.
+- **Integration**: exercise the whole path with a real `php artisan queue:work rabbitmq` run, out-of-band, not in the suite.
+
+See `domain/Auth/Tests/Feature/RegisterUserTest.php` (producer) and `domain/Auth/Tests/Unit/SendWelcomeNotificationTest.php` (listener).
 
 ```php
-Queue::fake();
-ExampleJob::dispatch(42);
-Queue::assertPushed(ExampleJob::class, fn (ExampleJob $j) => $j->payloadId === 42);
+Event::fake([UserRegistered::class]);
+port(RegisterUserContract::class)->handle($dto);
+Event::assertDispatched(UserRegistered::class, fn (UserRegistered $e) => $e->userId === $id);
 ```
 
 If you ever add a test that talks to a live service, keep the two rules the old broker test paid for: `markTestSkipped` when the service is unreachable (a broker-less CI then reports skipped, not failed), and time-bound every blocking call (a `read_write_timeout`, a polled deadline) so a bad mutation fails in seconds instead of hanging the run.
