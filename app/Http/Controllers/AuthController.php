@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Domain\Auth\Contracts\GetAuthenticatedUserContract;
 use Domain\Auth\Contracts\LoginContract;
 use Domain\Auth\Contracts\LogoutContract;
 use Domain\Auth\Contracts\RefreshTokenContract;
@@ -12,11 +13,11 @@ use Domain\Auth\DTOs\RegisterUserDTO;
 use Domain\Auth\DTOs\TokenPairDTO;
 use Domain\Auth\DTOs\UserDTO;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Auth;
 
 class AuthController extends Controller
 {
     public function __construct(
+        protected readonly GetAuthenticatedUserContract $getAuthenticatedUserAction,
         protected readonly LoginContract $loginAction,
         protected readonly LogoutContract $logoutAction,
         protected readonly RefreshTokenContract $refreshTokenAction,
@@ -41,13 +42,13 @@ class AuthController extends Controller
 
     public function logout(): Response
     {
-        $this->logoutAction->handle(Auth::user()->token()->id);
+        $this->logoutAction->handle();
 
         return response()->noContent();
     }
 
     public function me(): UserDTO
     {
-        return UserDTO::fromModel(Auth::user());
+        return $this->getAuthenticatedUserAction->handle();
     }
 }

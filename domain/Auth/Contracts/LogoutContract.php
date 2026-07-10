@@ -6,5 +6,5 @@ namespace Domain\Auth\Contracts;
 
 interface LogoutContract
 {
-    public function handle(string $accessTokenId): void;
+    public function handle(): void;
 }

@@ -80,3 +80,20 @@ it('requires authentication', function () {
     // Then
     $response->assertStatus(401);
 });
+
+it('answers 401 instead of crashing when the session carries no revocable token', function () {
+    // Given
+    // actingAs authenticates the user without issuing a bearer token, so token() is not a Token
+    $user = User::create([
+        'name'     => 'Jane Doe',
+        'email'    => 'no-bearer-token@example.com',
+        'password' => Hash::make('secret123'),
+    ]);
+    $this->actingAs($user);
+
+    // When
+    $response = $this->postJson('/logout');
+
+    // Then
+    $response->assertStatus(401)->assertJson(['code' => 'AUTH_UNAUTHENTICATED']);
+});
