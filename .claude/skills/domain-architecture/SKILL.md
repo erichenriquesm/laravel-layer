@@ -11,7 +11,7 @@ Read this before touching `domain/` or `app/`. Every rule below has a consequenc
 
 Hexagonal architecture applied only as far as it pays for itself. A **driver port** (input) is the interface the outside drives the app through — a use case; the app implements it. A **driven port** (output) is the interface the domain *owns and calls* to reach an external resource; an adapter implements it. Here every use case is an `Action` implementing a `Contract` (driver port), and callers depend on the contract.
 
-Persistence stays Eloquent-direct — no repository, no driven port; do not propose one. The **one** driven port is the message queue: `Domain\Shared\Contracts\MessageQueue`, implemented by the `RabbitMqMessageQueue` adapter in `domain/Shared/Queue/`. Abstracting "enqueue work" is worth it (producers never name a broker); abstracting CRUD is not. A driven port's adapter lives **inside the domain**, next to the port — the queue adapter sits in `domain/Shared/Queue/`, not outside `domain/`.
+Persistence stays Eloquent-direct, and background work uses Laravel's native queued Jobs (`app/Jobs`, dispatched onto the `rabbitmq` connection) — **no repository, no driven port; do not propose one.** Abstracting "enqueue work" behind an output port was tried and removed: the framework already serializes, delivers and retries a Job, so the port bought nothing but a hand-rolled dispatcher to maintain. Abstracting CRUD does not pay for itself either. Reach for a driven port only if a real second implementation actually appears.
 
 ```php
 // Caller depends on the contract, never on the concrete class.
@@ -36,8 +36,16 @@ domain/<Domain>/
 ├── Exceptions/  domain exceptions + the <Domain>ErrorCode enum
 ├── Providers/   one or more *ServiceProvider with the domain's public array $bindings
 ├── Support/     internal collaborators, no port (e.g. PassportTokenIssuer)
-├── Queue/       the one driven-port adapter: RabbitMqMessageQueue + DeferredCall/dispatcher (Shared only)
 └── Tests/{Unit,Feature}/
+```
+
+## Background work is a native queued Job
+
+No custom queue layer. A deferred task is a `ShouldQueue` Job in `app/Jobs`, dispatched with `Job::dispatch(...)` onto the default connection (`rabbitmq`, see `QUEUE_CONNECTION`) and processed by `php artisan queue:work rabbitmq`. `app/Jobs/ExampleJob.php` is the copy-me template: it sets `$tries`/`$backoff` and shows a broker-level retry via `release()` (RabbitMQ redelivers the released message; `attempts()` bounds it). Do not reintroduce a `MessageQueue` port, a `DeferredCall`, or a hand-rolled worker command — the framework owns serialization, delivery and retry.
+
+```php
+ExampleJob::dispatch($productId);                 // producer: no broker named beyond the connection
+$this->release($this->backoff);                   // inside handle(): hand back for a bounded retry
 ```
 
 ## The controller only translates HTTP
@@ -218,7 +226,4 @@ These predate or are tracked separately; touching them silently hides them.
 
 ```
 (none outstanding)
-
-caveat: RabbitMqMessageQueueTest is an integration test against a real broker; it SKIPS when
-        RabbitMQ is unreachable, so a CI without a broker reports those as skipped, not passed.
 ```

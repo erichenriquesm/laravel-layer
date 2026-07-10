@@ -23,7 +23,7 @@ If the task touches application code, at least one applies. When in doubt, read 
 
 ## Driver ports yes, driven ports no
 
-A driver port (input) is the interface the outside drives the app through; a driven port (output) is the interface the domain owns to reach an external resource, implemented by an adapter. Every use case is an `Action` implementing a `Contract` (driver port), and callers depend on the contract. Persistence uses Eloquent, Passport and facades directly — no repository, no driven port; do not propose one. The one driven port is the message queue (`Domain\Shared\Contracts\MessageQueue` → `RabbitMqMessageQueue` in `domain/Shared/Queue/`): abstracting "enqueue work" pays off, abstracting CRUD does not. A driven-port adapter lives inside the domain, next to the port.
+A driver port (input) is the interface the outside drives the app through; a driven port (output) is the interface the domain owns to reach an external resource, implemented by an adapter. Every use case is an `Action` implementing a `Contract` (driver port), and callers depend on the contract. Persistence uses Eloquent, Passport and facades directly, and background work uses Laravel's native queued Jobs (`app/Jobs`, dispatched onto the `rabbitmq` connection) — no repository, no driven port; do not propose one. Abstracting CRUD or "enqueue work" behind an output port does not pay for itself here.
 
 ```php
 public function __construct(private readonly LoginContract $loginAction) {}   // depends on the port
@@ -119,7 +119,4 @@ docker compose exec -T app php artisan test --filter="the guard's test"   # must
 
 ```
 (none outstanding)
-
-caveat: RabbitMqMessageQueueTest is an integration test against a real broker; it SKIPS when
-        RabbitMQ is unreachable, so a CI without a broker reports those as skipped, not passed.
 ```

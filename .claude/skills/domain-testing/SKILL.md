@@ -84,18 +84,17 @@ curl -s -i -X POST http://localhost:81/login -H 'Accept: application/json' \
 # check status, body, and Retry-After / X-RateLimit-* headers
 ```
 
-## Integration tests skip when their service is down, and must not hang
+## Queued jobs: fake for logic, a real worker for integration
 
-An integration test against a real service (RabbitMqMessageQueueTest → the broker) tries to connect in `beforeEach` and `markTestSkipped` when it can't — so a CI without the service reports skipped, not failed. And it must never block forever: a blocking consume takes a `waitTimeout`, a `basic_get` polls with a deadline. A broken publish then fails in seconds, it does not hang the suite. (Learned the hard way — a mutation with no timeout hung the run.)
+A native queued Job is tested without a broker. `Queue::fake()` + `assertPushed` proves the producer dispatches it; calling `handle()` directly proves its control flow — set a mocked underlying `Job` with `setJob()` to drive `attempts()` and assert `release()`. See `domain/Shared/Tests/Unit/ExampleJobTest.php`. The broker itself is exercised out-of-band with a real `php artisan queue:work rabbitmq` run, not in the suite.
 
 ```php
-try {
-    $this->connection = new AMQPStreamConnection($host, $port, $user, $pass, read_write_timeout: 5);
-} catch (\Throwable $e) {
-    $this->markTestSkipped('RabbitMQ is not reachable');
-}
-$adapter->consume($queue, $handler, waitTimeout: 5);   // bounded, never blocks forever
+Queue::fake();
+ExampleJob::dispatch(42);
+Queue::assertPushed(ExampleJob::class, fn (ExampleJob $j) => $j->payloadId === 42);
 ```
+
+If you ever add a test that talks to a live service, keep the two rules the old broker test paid for: `markTestSkipped` when the service is unreachable (a broker-less CI then reports skipped, not failed), and time-bound every blocking call (a `read_write_timeout`, a polled deadline) so a bad mutation fails in seconds instead of hanging the run.
 
 ## Trap: the guard caches the resolved user
 

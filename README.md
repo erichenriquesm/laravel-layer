@@ -9,7 +9,7 @@ Projeto base Laravel com **Docker**, **autenticação (Passport)**, **arquitetur
 - **DTOs**: `spatie/laravel-data` fazendo validação de entrada (no lugar de form requests) e serialização de saída (no lugar de resources)
 - **Testes**: Pest em `domain/<Domínio>/Tests/{Unit,Feature}`, escritos em Given/When/Then
 - **Dev**: Docker Compose, Makefile e scripts `.sh` para setup idempotente (incl. `passport:keys --force`)
-- **Filas**: containers **Redis** e **RabbitMQ**; comando `php artisan work {queue}` para consumir; driven port `Domain\Shared\Contracts\MessageQueue` (adapter RabbitMQ) para publicar
+- **Filas**: containers **Redis** e **RabbitMQ**; Jobs nativos (`app/Jobs`, `ShouldQueue`) despachados na conexão `rabbitmq` e processados por `php artisan queue:work rabbitmq`
 
 ---
 
@@ -50,7 +50,7 @@ $this->mock(LoginContract::class, function (MockInterface $mock) {
 
 ### O que não existe: driven ports
 
-**As actions usam Eloquent, `Auth::attempt()` e o Passport diretamente.** Não há `UserRepositoryContract`, nem repositórios, nem abstração de persistência.
+**As actions usam Eloquent, `Auth::attempt()` e o Passport diretamente.** Não há `UserRepositoryContract`, nem repositórios, nem abstração de persistência. O trabalho em background também não passa por um port: é um Job nativo do Laravel (`app/Jobs`, `ShouldQueue`) — o framework já serializa, entrega e reprocessa.
 
 Isso é uma escolha, não um esquecimento. O preço de um driven port de banco em CRUD é alto — some a expressividade do query builder, aparecem DTOs de credencial, hasher e emissor de token — e o retorno (trocar o banco, testar sem ele) raramente se realiza. O trade-off aceito é: **queries simples, domínio que precisa de banco para ser testado.** Por isso os testes de action ficam em `Tests/Feature`, não em `Tests/Unit`.
 
@@ -222,42 +222,45 @@ docker compose exec app php artisan test --testsuite=Unit
 
 ## 📬 Filas: Redis + RabbitMQ
 
-O ambiente já inclui os containers **Redis** (porta 6379) e **RabbitMQ** (AMQP 5672, management 15672). A fila é o **único driven port** do projeto: o produtor depende da interface `Domain\Shared\Contracts\MessageQueue`, e o adapter `RabbitMqMessageQueue` fala com o broker. (A persistência segue Eloquent direto — a fila é a exceção deliberada, porque abstrair "enfileirar trabalho" evita que o produtor conheça o RabbitMQ.)
+O ambiente já inclui os containers **Redis** (porta 6379) e **RabbitMQ** (AMQP 5672, management 15672). Não há camada de fila própria: trabalho em background é um **Job nativo** do Laravel. A conexão padrão é a `rabbitmq` (`QUEUE_CONNECTION` no `.env`), provida pelo pacote `vladimir-yuldashev/laravel-queue-rabbitmq`; o framework cuida de serializar, entregar e reprocessar o Job. Nenhum driven port no caminho — o produtor só despacha.
 
-### Publicar mensagens
+### Despachar um Job
 
-Injete o port `MessageQueue` e publique um `DeferredCall` — a chamada a executar depois no worker. Nada de `Queue::` estático; o produtor nunca nomeia o RabbitMQ.
+Crie um Job `ShouldQueue` em `app/Jobs` e despache com `dispatch()`. O produtor não nomeia o broker; o Job vai para a conexão padrão. `app/Jobs/ExampleJob.php` é o modelo para copiar:
 
 ```php
-use Domain\Shared\Contracts\MessageQueue;
-use Domain\Shared\Queue\DeferredCall;
+use App\Jobs\ExampleJob;
 
-final class ProductReport
+// enfileira o Job na conexão padrão (rabbitmq)
+ExampleJob::dispatch($productId);
+```
+
+Dentro do `handle()`, `$tries`/`$backoff` limitam as tentativas e `release()` devolve a mensagem ao broker para reprocessar depois de uma falha transitória — o RabbitMQ reentrega e `attempts()` conta as entregas, então o requeue é naturalmente limitado por `$tries`:
+
+```php
+public function handle(): void
 {
-    public function __construct(private readonly MessageQueue $queue) {}
+    if (! $this->readyToRun()) {
+        // falha transitória → devolve ao broker; depois de $tries vai para failed_jobs
+        $this->release($this->backoff);
 
-    public function schedule(int $productId): void
-    {
-        // enfileira ReportBuilder::build($productId) na fila "reports"
-        $this->queue->publish('reports', new DeferredCall(
-            ReportBuilder::class, 'build', [$productId],
-        ));
+        return;
     }
+
+    // ... trabalho ...
 }
 ```
 
-O `MessageDispatcher` do worker decodifica o `DeferredCall` e chama `$class::$method(...$args)`. Alvos de método de instância são resolvidos **pelo container**, então podem declarar dependências no construtor — o container as injeta (um método estático é chamado direto, sem instância).
+### Processar a fila
 
-### Processar filas
-
-Dentro do container (ou no host com PHP/Redis/RabbitMQ configurados):
+Dentro do container (ou no host com PHP/RabbitMQ configurados):
 
 ```bash
-# Consumir a fila "emails" (roda até encerrar)
-php artisan work emails
+# consome a conexão rabbitmq (roda até encerrar)
+php artisan queue:work rabbitmq
 
-# Opções úteis: prefetch, delay, requeue em erro, etc.
-php artisan work emails --prefetch=5 --delay=10 --onerror=requeue
+# opções úteis: tentativas, timeout, backoff, parar quando esvaziar
+php artisan queue:work rabbitmq --tries=3 --timeout=60 --stop-when-empty
 ```
 
 ### Gerenciadores de processos (PM2, systemd, etc.)
@@ -267,14 +270,14 @@ Para manter o worker rodando em produção, use um gerenciador de processos. Exe
 ```bash
 # Instalar PM2: npm i -g pm2
 
-# Processar a fila "emails" com 2 instâncias e reinício automático
-pm2 start "php artisan work emails" --name worker-emails -i 2
+# Processar a conexão rabbitmq com 2 instâncias e reinício automático
+pm2 start "php artisan queue:work rabbitmq" --name worker -i 2
 
-# Ou com caminho absoluto ao PHP/projeto
-pm2 start "docker-compose exec -T app php artisan work emails" --name worker-emails
+# Ou via container
+pm2 start "docker-compose exec -T app php artisan queue:work rabbitmq" --name worker
 ```
 
-Com **systemd**, crie um unit que execute `php artisan work <queue>` e use `Restart=always`. Em todos os casos, o worker consome mensagens da fila RabbitMQ configurada no `.env` (`RABBITMQ_HOST`, `RABBITMQ_PORT`, etc.).
+Com **systemd**, crie um unit que execute `php artisan queue:work rabbitmq` e use `Restart=always`. Em todos os casos, o worker consome da fila RabbitMQ configurada no `.env` (`RABBITMQ_HOST`, `RABBITMQ_PORT`, etc.).
 
 ---
 
