@@ -2,95 +2,34 @@
 
 namespace App\Http\Controllers;
 
+use Domain\Auth\Contracts\LoginContract;
+use Domain\Auth\Contracts\RegisterUserContract;
 use Domain\Auth\DTOs\LoginDTO;
 use Domain\Auth\DTOs\RegisterUserDTO;
-use Domain\Auth\Services\Login;
-use Domain\Auth\Services\RegisterUser;
-use Domain\Shared\DomainTypes\Email;
-use Domain\Shared\Helpers\APIResponse;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
+use Domain\Auth\DTOs\AccessTokenDTO;
+use Domain\Auth\DTOs\UserDTO;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Validator;
 
 class AuthController extends Controller
 {
     public function __construct(
-        protected readonly Login $loginService,
-        protected readonly RegisterUser $registerUserService,
+        protected readonly LoginContract $loginAction,
+        protected readonly RegisterUserContract $registerUserAction,
     ) {
     }
-    
-    public function register(Request $request): JsonResponse
+
+    public function register(RegisterUserDTO $input): UserDTO
     {
-        try {
-            $validation = Validator::make($request->input(), [
-                'name'     => 'required|string',
-                'email'    => 'required|unique:users,email',
-                'password' => 'required|string|confirmed',
-            ]);
-
-            if ($validation->fails()) {
-                return APIResponse::unprocessableEntity($validation->errors());
-            }
-
-            return APIResponse::success($this->registerUserService->exec(new RegisterUserDTO(
-                name: $request->input('name'),
-                email: new Email($request->input('email')),
-                password: $request->input('password'),
-            )));
-        } catch (\Exception $e) {
-            $errorMessage = $e->getMessage();
-            if ($errorMessage === 'Invalid e-mail.') {
-                return APIResponse::unprocessableEntity([
-                    'email' => 'Email field is invalid',
-                ]);
-            }
-
-            Log::error(__CLASS__, [
-                'message' => $errorMessage,
-                'trace'   => $e->getTrace(),
-            ]);
-
-            return APIResponse::badRequest([
-                'error' => 'error to register user',
-            ]);
-        }
+        return $this->registerUserAction->handle($input);
     }
 
-    public function login(Request $request): JsonResponse
+    public function login(LoginDTO $input): AccessTokenDTO
     {
-        try {
-            $validation = Validator::make($request->input(), [
-                'email'    => 'required|email',
-                'password' => 'required|string',
-            ]);
-
-            if ($validation->fails()) {
-                return APIResponse::unprocessableEntity($validation->errors());
-            }
-
-            return APIResponse::success($this->loginService->exec(new LoginDTO(
-                email: $request->input('email'),
-                password: $request->input('password'),
-            )));
-        } catch (\Exception $e) {
-            $message = $e->getMessage();
-            if ($message !== 'invalid_credentials') {
-                Log::error(__CLASS__, [
-                    'message' => $e->getMessage(),
-                    'trace'   => $e->getTrace(),
-                ]);
-            }
-
-            return APIResponse::unauthorized(['Verify your credentials']);
-        }
+        return $this->loginAction->handle($input);
     }
 
-    public function me(): JsonResponse
+    public function me(): UserDTO
     {
-        return response()->json(Auth::user());
+        return UserDTO::fromModel(Auth::user());
     }
 }
-

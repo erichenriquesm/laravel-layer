@@ -2,24 +2,24 @@
 
 declare(strict_types=1);
 
-namespace Domain\Auth\Services;
+namespace Domain\Auth\Actions;
 
 use App\Models\User;
+use Domain\Auth\Contracts\RegisterUserContract;
 use Domain\Auth\DTOs\RegisterUserDTO;
+use Domain\Auth\DTOs\UserDTO;
 use Illuminate\Support\Facades\Hash;
 
-class RegisterUser
+class RegisterUser implements RegisterUserContract
 {
-    public function exec(RegisterUserDTO $input): array
+    public function handle(RegisterUserDTO $input): UserDTO
     {
-        User::create([
+        $user = User::create([
             'name'     => $input->name,
             'email'    => $input->email->getValue(),
             'password' => Hash::make($input->password),
         ]);
 
-        return [
-            'message' => 'User registered',
-        ];
+        return UserDTO::fromModel($user);
     }
 }

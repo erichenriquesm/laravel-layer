@@ -1,14 +1,103 @@
 # Laravel Layer — Base para novos projetos
 
-Projeto base Laravel com **Docker**, **autenticação (Passport)**, **domain layer** (services + DTOs) e **testes em Pest**. Use como ponto de partida para novos backends.
+Projeto base Laravel com **Docker**, **autenticação (Passport)**, **arquitetura hexagonal pragmática** (ports & adapters) e **testes em Pest**. Use como ponto de partida para novos backends.
 
 ### O que já vem
 
 - **Auth**: registro, login e rota `/me` com Laravel Passport
-- **Estrutura**: services em `domain/` (ex.: `domain/Auth/Services`), DTOs, tipos de domínio (`domain/Shared`), controllers por contexto
-- **Testes**: Pest em `tests/Feature/Auth` (controllers, services, DTOs)
+- **Estrutura**: um diretório por domínio em `domain/`, com actions, contracts (ports), DTOs, provider e testes próprios
+- **DTOs**: `spatie/laravel-data` fazendo validação de entrada (no lugar de form requests) e serialização de saída (no lugar de resources)
+- **Testes**: Pest em `domain/<Domínio>/Tests/{Unit,Feature}`, escritos em Given/When/Then
 - **Dev**: Docker Compose, Makefile e scripts `.sh` para setup idempotente (incl. `passport:keys --force`)
 - **Filas**: containers **Redis** e **RabbitMQ**; comando `php artisan work {queue}` para processar filas; helper `Domain\Shared\Helpers\Queue` para publicar mensagens (classe + método + argumentos)
+
+---
+
+## 🧩 Arquitetura: ports & adapters, de forma pragmática
+
+A ideia central da arquitetura hexagonal é que a regra de negócio não conheça o mundo externo. Quem chama de fora entra por um **driver port** (porta de entrada); quem é chamado de fora sai por um **driven port** (porta de saída). Aqui essa ideia é aplicada **até onde ela paga o próprio custo** — e o README é explícito sobre onde ela para.
+
+### O que existe: driver ports
+
+Cada caso de uso é uma **action** que implementa um **contract**. O contract é o driver port: é ele, e não a classe concreta, que o mundo externo enxerga.
+
+```
+domain/Auth/
+├── Contracts/           ← driver ports (LoginContract, RegisterUserContract)
+├── Actions/             ← implementações (Login, RegisterUser)
+├── DTOs/                ← entrada e saída (LoginDTO, AccessTokenDTO, UserDTO…)
+├── Exceptions/          ← exceções de domínio (InvalidCredentialsException)
+├── Providers/           ← liga contract → action
+└── Tests/{Unit,Feature}
+```
+
+O `AuthController` depende de `LoginContract`, nunca de `Login`. O adapter primário é o próprio controller: ele traduz HTTP em DTO, chama a porta e devolve um DTO.
+
+```php
+public function login(LoginDTO $input): AccessTokenDTO
+{
+    return $this->loginAction->handle($input);
+}
+```
+
+O ganho concreto disso aparece no teste: dá para substituir a implementação sem tocar no controller.
+
+```php
+$this->mock(LoginContract::class, function (MockInterface $mock) {
+    $mock->shouldReceive('handle')->once()->andReturn(new AccessTokenDTO('fake'));
+});
+```
+
+### O que não existe: driven ports
+
+**As actions usam Eloquent, `Auth::attempt()` e o Passport diretamente.** Não há `UserRepositoryContract`, nem repositórios, nem abstração de persistência.
+
+Isso é uma escolha, não um esquecimento. O preço de um driven port de banco em CRUD é alto — some a expressividade do query builder, aparecem DTOs de credencial, hasher e emissor de token — e o retorno (trocar o banco, testar sem ele) raramente se realiza. O trade-off aceito é: **queries simples, domínio que precisa de banco para ser testado.** Por isso os testes de action ficam em `Tests/Feature`, não em `Tests/Unit`.
+
+Se um dia a persistência precisar ser abstraída, o caminho é criar os contracts de saída em `domain/<Domínio>/Contracts/` e os adapters fora de `domain/`.
+
+### Bindings: um provider por domínio
+
+Não existe arquivo central de bindings. Cada domínio declara os seus no próprio provider, usando o array `$bindings` nativo do Laravel:
+
+```php
+class AuthDomainServiceProvider extends ServiceProvider
+{
+    public array $bindings = [
+        LoginContract::class        => Login::class,
+        RegisterUserContract::class => RegisterUser::class,
+    ];
+}
+```
+
+O `App\Providers\DomainServiceProvider` descobre esses providers por convenção (`domain/*/Providers/*ServiceProvider.php`) e os registra. **Adicionar um domínio não exige editar nada dentro de `app/`.**
+
+### Criando um novo domínio
+
+Copie `domain/Auth` como molde:
+
+```
+domain/Billing/
+├── Contracts/BillingContract.php               ← interface com handle(BillingDTO): SomeDTO
+├── Actions/Billing.php                         ← implements BillingContract
+├── DTOs/BillingDTO.php                         ← extends Spatie\LaravelData\Data
+├── Providers/BillingDomainServiceProvider.php  ← public array $bindings = [...]
+└── Tests/{Unit,Feature}/
+```
+
+Rode `composer dump-autoload` e pronto — o provider é descoberto sozinho.
+
+### Contrato HTTP
+
+As respostas são os próprios DTOs de saída, sem envelope. Os erros seguem o formato padrão do Laravel.
+
+| Rota | Sucesso | Erro |
+|---|---|---|
+| `POST /register` | `201` + `{id, name, email}` | `422` `{message, errors}` |
+| `POST /login` | `200` + `{token}` | `401` `{message}` / `422` |
+| `GET /me` | `200` + `{id, name, email}` | `401` |
+
+A validação vive nos atributos do DTO de entrada, não em form requests. O `Handler` força JSON em qualquer resposta de erro, já que a aplicação só expõe API.
 
 ---
 
@@ -25,7 +114,15 @@ cp .env.example .env
 make setup
 ```
 
-Depois disso, a API estará no ar (rotas em `routes/auth.php`). Para rodar os testes: `docker-compose exec app php artisan test`.
+Depois disso, a API estará no ar (rotas em `routes/auth.php`).
+
+```bash
+# Todos os testes
+docker compose exec app php artisan test
+
+# Só os testes rápidos (DTOs e value objects): sem query nem request HTTP
+docker compose exec app php artisan test --testsuite=Unit
+```
 
 ---
 

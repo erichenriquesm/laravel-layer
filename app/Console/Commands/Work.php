@@ -5,7 +5,6 @@ namespace App\Console\Commands;
 use Domain\Shared\Helpers\Queue;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use PhpAmqpLib\Message\AMQPMessage;
 
 class Work extends Command
@@ -29,15 +28,7 @@ class Work extends Command
     private $processesEachItemCount = 0;
 
     /**
-     * Calcula o n-ésimo número de Fibonacci usando a fórmula de Binet.
-     *
-     * A fórmula de Binet é uma forma matemática para calcular rapidamente o número de Fibonacci
-     * sem precisar calcular os números anteriores, baseada na razão áurea (phi).
-     * A fórmula é dada por: F(n) = ((phi ^ n) - (1 - phi) ^ n) / sqrt(5), onde phi é a razão áurea.
-     *
-     * @param int $number O índice do número de Fibonacci que queremos calcular. Deve ser um número inteiro não negativo.
-     *
-     * @return int O n-ésimo número de Fibonacci, arredondado para o inteiro mais próximo.
+     * Nth Fibonacci number via Binet's closed form, so no iteration is needed.
      */
     private function getFib($number)
     {
@@ -49,35 +40,31 @@ class Work extends Command
      */
     public function handle()
     {
-        $queue = $this->argument('queue'); # Recupera o argumento 'queue', que contém o nome da fila a ser processada
-        $prefetch = (int) $this->option('prefetch'); # Converte a opção 'prefetch' para inteiro, indicando o número de mensagens que o consumidor deve processar simultaneamente
-        $assure = ($this->option('assure') === 'true'); # Converte a opção 'assure' para booleano, indicando se a operação deve ser garantida (true) ou não (false)
-        $onerror = $this->option('onerror'); # Recupera a opção 'onerror', que define a ação a ser tomada em caso de erro (como 'retries' ou 'stop')
-        $delay = $this->option('delay') ?? 0; # Recupera a opção 'delay' (tempo de atraso) ou define como 0 caso não esteja presente
-        $requeueMode = $this->option('requeueMode') ?? 'nack'; # Recupera a opção 'requeueMode', que define o modo de reencaminhamento da mensagem (padrão é 'nack')
-        $maxWorkCount = (int) $this->option('maxWorkCount') ?? 0; # Converte a opção 'maxWorkCount' para inteiro, que define o número máximo de itens a serem processados
-        $requeueTime = (int) $this->option('requeueTime') ?? 60; # Converte a opção 'requeueTime' para inteiro, que define o tempo de espera para reencaminhar a mensagem (padrão é 60 segundos)
-        $processesEachItem = $this->option('processesEachItem') ?? 0; # Recupera a opção 'processesEachItem', que define o número de itens a serem processados por vez
-        $processEveryTime = $this->option('processEveryTime') ?? 0; # Recupera a opção 'processEveryTime', que define a frequência de execução do processamento
+        $queue = $this->argument('queue');
+        $prefetch = (int) $this->option('prefetch');
+        $assure = ($this->option('assure') === 'true');
+        $onerror = $this->option('onerror');
+        $delay = $this->option('delay') ?? 0;
+        $requeueMode = $this->option('requeueMode') ?? 'nack';
+        $maxWorkCount = (int) $this->option('maxWorkCount') ?? 0;
+        $requeueTime = (int) $this->option('requeueTime') ?? 60;
+        $processesEachItem = $this->option('processesEachItem') ?? 0;
+        $processEveryTime = $this->option('processEveryTime') ?? 0;
 
-        # Se exisitr prefetch, será configurado o QoS do consumidor.
         if ($prefetch) {
             Queue::setQos(0, $prefetch, false);
         }
 
-        # Obtém a quantidade de consumidores da fila a ser consumida.
         $consumerCount = Queue::getConsumerCount($queue);
-        
-        # Se existir delay, o delay será ajustado adicionando um número de Fibonacci relacionado ao número de consumidores.
+
+        # Spread the delay across concurrent consumers so they do not wake up in lockstep.
         if ($delay > 0 && $consumerCount > 0) {
             $delay = $delay + $this->getFib($consumerCount + 2);
         }
 
         Queue::consume($queue, function (AMQPMessage $message) use ($queue, $assure, $onerror, $delay, $maxWorkCount, $requeueMode, $requeueTime, $processesEachItem, $processEveryTime) {
-            # Se exisitr um limite de consumidores.
             if ($maxWorkCount) {
                 $this->workCount++;
-                # Se a quantidade de consumidores for maior que o máximo permitido, será cancelado o consumidor.
                 if ($this->workCount > $maxWorkCount) {
                     exit(0);
                 }
@@ -114,7 +101,7 @@ class Work extends Command
 
                     $this->processesEachItemCount++;
 
-                    Log::debug('PROCESSANDO POR PACOTE DE ITEM', [
+                    Log::debug('Worker -> processing item batch', [
                         'requeueMode' => $requeueMode,
                         'processesEachItemCount' => $this->processesEachItemCount ,
                         'processesEachItem' => (int)$processesEachItem

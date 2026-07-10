@@ -14,4 +14,10 @@ abstract class TestCase extends BaseTestCase
         parent::setUp();
         DB::beginTransaction();
     }
+
+    protected function tearDown(): void
+    {
+        DB::rollBack();
+        parent::tearDown();
+    }
 }

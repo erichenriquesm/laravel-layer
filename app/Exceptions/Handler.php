@@ -2,7 +2,10 @@
 
 namespace App\Exceptions;
 
+use Domain\Auth\Exceptions\InvalidCredentialsException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Throwable;
 
 class Handler extends ExceptionHandler
@@ -23,8 +26,16 @@ class Handler extends ExceptionHandler
      */
     public function register(): void
     {
-        $this->reportable(function (Throwable $e) {
-            //
+        $this->renderable(function (InvalidCredentialsException $e, Request $request): JsonResponse {
+            return response()->json(['message' => $e->getMessage()], 401);
         });
+    }
+
+    /**
+     * The app exposes API routes only, so errors must never redirect.
+     */
+    protected function shouldReturnJson($request, Throwable $e): bool
+    {
+        return true;
     }
 }

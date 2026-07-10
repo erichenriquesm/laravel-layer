@@ -14,7 +14,7 @@
 uses(
     Tests\TestCase::class,
     // Illuminate\Foundation\Testing\RefreshDatabase::class,
-)->in('Feature');
+)->in(__DIR__.'/../domain');
 
 /*
 |--------------------------------------------------------------------------
@@ -42,7 +42,19 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * Resolves a driver port from the container, preserving its own type.
+ *
+ * app() is typed as the Application container, which implements HttpKernelInterface and
+ * therefore already owns a handle(Symfony\Component\HttpFoundation\Request). Static analysis
+ * matches that one instead of the port's handle(DTO).
+ *
+ * @template TPort of object
+ *
+ * @param  class-string<TPort>  $port
+ * @return TPort
+ */
+function port(string $port): object
 {
-    // ..
+    return app($port);
 }
