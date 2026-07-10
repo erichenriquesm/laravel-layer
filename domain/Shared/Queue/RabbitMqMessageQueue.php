@@ -56,8 +56,12 @@ final class RabbitMqMessageQueue implements MessageQueue
 
     /**
      * @param callable(AMQPMessage): void $handler
+     *
+     * $waitTimeout is null for the worker (block forever waiting for messages). A positive value
+     * makes each wait time out (throwing AMQPTimeoutException) — used by tests so a broken publish
+     * fails fast instead of hanging, and available as a heartbeat if a worker ever needs one.
      */
-    public function consume(string $queue, callable $handler): void
+    public function consume(string $queue, callable $handler, ?float $waitTimeout = null): void
     {
         $this->declareQueue($queue);
 
@@ -72,7 +76,7 @@ final class RabbitMqMessageQueue implements MessageQueue
         );
 
         while ($this->channel()->is_consuming()) {
-            $this->channel()->wait();
+            $this->channel()->wait(null, false, $waitTimeout ?? 0);
         }
     }
 
