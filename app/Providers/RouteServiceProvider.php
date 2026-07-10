@@ -48,6 +48,10 @@ class RouteServiceProvider extends ServiceProvider
         RateLimiter::for('register', function (Request $request) {
             return Limit::perMinute(3)->by($request->ip());
         });
+
+        RateLimiter::for('refresh', function (Request $request) {
+            return Limit::perMinute(10)->by($request->ip());
+        });
     }
 
     protected function loadRoutesFromDirectory($path, $middleware, $prefix = null)

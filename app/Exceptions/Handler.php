@@ -3,6 +3,7 @@
 namespace App\Exceptions;
 
 use Domain\Auth\Exceptions\InvalidCredentialsException;
+use Domain\Auth\Exceptions\InvalidRefreshTokenException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,6 +28,10 @@ class Handler extends ExceptionHandler
     public function register(): void
     {
         $this->renderable(function (InvalidCredentialsException $e, Request $request): JsonResponse {
+            return response()->json(['message' => $e->getMessage()], 401);
+        });
+
+        $this->renderable(function (InvalidRefreshTokenException $e, Request $request): JsonResponse {
             return response()->json(['message' => $e->getMessage()], 401);
         });
     }

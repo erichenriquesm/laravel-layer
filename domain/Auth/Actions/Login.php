@@ -4,30 +4,29 @@ declare(strict_types=1);
 
 namespace Domain\Auth\Actions;
 
-use App\Models\User;
 use Domain\Auth\Contracts\LoginContract;
 use Domain\Auth\DTOs\LoginDTO;
-use Domain\Auth\DTOs\AccessTokenDTO;
+use Domain\Auth\DTOs\TokenPairDTO;
 use Domain\Auth\Exceptions\InvalidCredentialsException;
-use Illuminate\Support\Facades\Auth;
+use Domain\Auth\Support\PassportTokenIssuer;
+use Laravel\Passport\Exceptions\OAuthServerException;
 
 class Login implements LoginContract
 {
-    public function handle(LoginDTO $input): AccessTokenDTO
-    {
-        $credentials = [
-            'email'    => $input->email,
-            'password' => $input->password,
-        ];
+    public function __construct(
+        private readonly PassportTokenIssuer $tokens,
+    ) {}
 
-        if (! Auth::guard('web')->attempt($credentials)) {
+    public function handle(LoginDTO $input): TokenPairDTO
+    {
+        try {
+            return $this->tokens->issue([
+                'grant_type' => 'password',
+                'username'   => $input->email,
+                'password'   => $input->password,
+            ]);
+        } catch (OAuthServerException) {
             throw new InvalidCredentialsException();
         }
-
-        $user = User::where('email', '=', $input->email)->first();
-
-        return new AccessTokenDTO(
-            token: $user->createToken('main')->accessToken,
-        );
     }
 }

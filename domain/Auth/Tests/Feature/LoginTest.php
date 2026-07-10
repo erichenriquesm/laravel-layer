@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 use App\Models\User;
 use Domain\Auth\Contracts\LoginContract;
-use Domain\Auth\DTOs\AccessTokenDTO;
 use Domain\Auth\DTOs\LoginDTO;
+use Domain\Auth\DTOs\TokenPairDTO;
 use Domain\Auth\Exceptions\InvalidCredentialsException;
 use Illuminate\Support\Facades\Hash;
 
-it('returns an AccessTokenDTO when the credentials match', function () {
+it('returns an access token and a refresh token when the credentials match', function () {
     // Given
     $user = User::create([
         'name'     => 'Jane Doe',
@@ -22,8 +22,26 @@ it('returns an AccessTokenDTO when the credentials match', function () {
     $result = port(LoginContract::class)->handle($dto);
 
     // Then
-    expect($result)->toBeInstanceOf(AccessTokenDTO::class);
-    expect($result->token)->toBeString()->not->toBeEmpty();
+    expect($result)->toBeInstanceOf(TokenPairDTO::class);
+    expect($result->accessToken)->toBeString()->not->toBeEmpty();
+    expect($result->refreshToken)->toBeString()->not->toBeEmpty();
+    expect($result->tokenType)->toBe('Bearer');
+});
+
+it('sets expires_in from the configured access token lifetime', function () {
+    // Given
+    User::create([
+        'name'     => 'Jane Doe',
+        'email'    => 'login-ttl@example.com',
+        'password' => Hash::make('secret123'),
+    ]);
+    $dto = new LoginDTO(email: 'login-ttl@example.com', password: 'secret123');
+
+    // When
+    $result = port(LoginContract::class)->handle($dto);
+
+    // Then
+    expect($result->expiresIn)->toBe(config('tokens.access_token_minutes') * 60);
 });
 
 it('throws InvalidCredentialsException when the password is wrong', function () {
@@ -53,7 +71,7 @@ it('throws InvalidCredentialsException when the user does not exist', function (
     expect($act)->toThrow(InvalidCredentialsException::class);
 });
 
-it('logs in through the route and responds 200 with the token', function () {
+it('logs in through the route and responds 200 with the token pair', function () {
     // Given
     User::create([
         'name'     => 'Jane Doe',
@@ -68,8 +86,9 @@ it('logs in through the route and responds 200 with the token', function () {
     ]);
 
     // Then
-    $response->assertStatus(200)->assertJsonStructure(['token']);
-    expect($response->json('token'))->toBeString()->not->toBeEmpty();
+    $response->assertStatus(200)
+        ->assertJsonStructure(['access_token', 'refresh_token', 'expires_in', 'token_type']);
+    expect($response->json('token_type'))->toBe('Bearer');
 });
 
 it('responds 401 through the route when the credentials are invalid', function () {

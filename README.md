@@ -25,7 +25,7 @@ Cada caso de uso é uma **action** que implementa um **contract**. O contract é
 domain/Auth/
 ├── Contracts/           ← driver ports (LoginContract, RegisterUserContract)
 ├── Actions/             ← implementações (Login, RegisterUser)
-├── DTOs/                ← entrada e saída (LoginDTO, AccessTokenDTO, UserDTO…)
+├── DTOs/                ← entrada e saída (LoginDTO, TokenPairDTO, UserDTO…)
 ├── Exceptions/          ← exceções de domínio (InvalidCredentialsException)
 ├── Providers/           ← liga contract → action
 └── Tests/{Unit,Feature}
@@ -34,7 +34,7 @@ domain/Auth/
 O `AuthController` depende de `LoginContract`, nunca de `Login`. O adapter primário é o próprio controller: ele traduz HTTP em DTO, chama a porta e devolve um DTO.
 
 ```php
-public function login(LoginDTO $input): AccessTokenDTO
+public function login(LoginDTO $input): TokenPairDTO
 {
     return $this->loginAction->handle($input);
 }
@@ -44,7 +44,7 @@ O ganho concreto disso aparece no teste: dá para substituir a implementação s
 
 ```php
 $this->mock(LoginContract::class, function (MockInterface $mock) {
-    $mock->shouldReceive('handle')->once()->andReturn(new AccessTokenDTO('fake'));
+    $mock->shouldReceive('handle')->once()->andReturn(new TokenPairDTO('access', 'refresh', 900, 'Bearer'));
 });
 ```
 
@@ -94,10 +94,74 @@ As respostas são os próprios DTOs de saída, sem envelope. Os erros seguem o f
 | Rota | Sucesso | Erro |
 |---|---|---|
 | `POST /register` | `201` + `{id, name, email}` | `422` `{message, errors}` |
-| `POST /login` | `200` + `{token}` | `401` `{message}` / `422` |
+| `POST /login` | `200` + `{access_token, refresh_token, expires_in, token_type}` | `401` `{message}` / `422` |
+| `POST /refresh` | `200` + mesmo par, rotacionado | `401` `{message}` / `422` |
+| `POST /logout` | `204` | `401` |
 | `GET /me` | `200` + `{id, name, email}` | `401` |
 
 A validação vive nos atributos do DTO de entrada, não em form requests. O `Handler` força JSON em qualquer resposta de erro, já que a aplicação só expõe API.
+
+---
+
+## 🔑 Tokens: expiração, rotação e logout
+
+O `/login` usa o **password grant** do Passport (habilitado em `AuthServiceProvider`, já que o Passport 11+ o desliga por padrão). O `client_id` e o `client_secret` do password grant client ficam no servidor — o cliente da API nunca os vê.
+
+Há dois tokens, com propósitos diferentes. O **access token** é curto e viaja em toda requisição. O **refresh token** é longo, fica guardado e só é usado para obter um access token novo. A ideia é que o token exposto o tempo todo valha pouco tempo.
+
+### Como o front deve buscar um token novo
+
+1. `POST /login` devolve `access_token`, `refresh_token`, `expires_in` (segundos) e `token_type`.
+2. O cliente guarda os dois e envia `Authorization: Bearer <access_token>` em cada requisição.
+3. Quando o access token expira, a API responde **`401`**.
+4. Ao ver esse `401`, o cliente chama `POST /refresh` com `{"refresh_token": "..."}` no corpo e recebe **um par novo**, com um novo refresh token junto.
+5. O cliente **substitui os dois tokens** e repete a requisição original.
+6. Se o `/refresh` também responder `401`, não há como recuperar: o refresh token expirou, foi revogado ou já foi usado. O cliente descarta tudo e manda o usuário para a tela de login.
+
+Quatro detalhes que costumam morder quem implementa o cliente:
+
+**O refresh token é de uso único.** A rotação revoga o antigo. Se você guardar só o access token novo e continuar mandando o refresh token velho, a próxima chamada ao `/refresh` devolve `401` mesmo dentro do prazo de 14 dias.
+
+**A rotação também mata o access token antigo, na hora.** Ele não fica valendo até o `expires_in` acabar: o `/refresh` o revoga junto. Requisições em voo que ainda carregam o token velho vão tomar `401`. É outra razão para serializar o refresh, e para trocar os dois tokens de uma vez.
+
+**Não dispare vários `/refresh` em paralelo.** Se cinco requisições tomarem `401` ao mesmo tempo e cada uma chamar `/refresh`, a primeira rotaciona e invalida o token que as outras quatro estão usando — elas tomam `401` e derrubam a sessão. O cliente precisa serializar: o primeiro `401` dispara o refresh, os demais esperam o resultado dele.
+
+**`/refresh` não usa `Authorization`.** Ele é a saída de emergência para quando o access token não vale mais. Mandar o access token expirado no header não atrapalha, mas não serve para nada.
+
+O `POST /logout` (esse sim autenticado) revoga o access token **e** o refresh token daquela sessão. As outras sessões do mesmo usuário continuam válidas.
+
+### Onde o cliente guarda o refresh token
+
+Ele vale 14 dias e permite emitir access tokens novos, então é o segredo mais valioso que o cliente carrega.
+
+Em **app nativo ou mobile**, use o armazenamento seguro da plataforma (Keychain, Keystore).
+
+Em **SPA no navegador**, saiba o que está aceitando: um refresh token em `localStorage` é legível por qualquer XSS na sua página, e quem o roubar renova o acesso por duas semanas. Se esse risco não for aceitável, o caminho é servir o refresh token num cookie `httpOnly; Secure; SameSite` e ler dele no `/refresh` — o que exige proteção CSRF e sai do padrão da RFC. Este projeto usa o corpo da requisição, como manda a [RFC 6749 §6](https://datatracker.ietf.org/doc/html/rfc6749#section-6).
+
+### Ajustando os tempos de expiração
+
+Os tempos vivem em [`config/tokens.php`](config/tokens.php) e são lidos do `.env`. Não há valor hardcoded no código.
+
+```
+AUTH_ACCESS_TOKEN_MINUTES=15   # vida do access token
+AUTH_REFRESH_TOKEN_DAYS=14     # por quanto tempo o usuário fica logado sem digitar a senha
+AUTH_PERSONAL_ACCESS_TOKEN_DAYS=1
+```
+
+Depois de mudar, rode `php artisan config:clear` (ou reinicie o container). Os valores são aplicados em `App\Providers\AuthServiceProvider`, e **tokens já emitidos mantêm a validade que tinham** — a mudança só afeta os próximos.
+
+Ao escolher os números, o trade-off é este: encurtar o access token reduz a janela em que um token vazado é útil, ao custo de mais chamadas ao `/refresh`. Encurtar o refresh token força o usuário a digitar a senha com mais frequência.
+
+Sem essa configuração o Passport expira **tudo em um ano** — foi o default herdado até este projeto passar a definir os três valores. Um token vazado seria utilizável por 12 meses.
+
+### Rate limit dos endpoints de autenticação
+
+| Rota | Limite |
+|---|---|
+| `POST /login` | 5/min por IP **e** 10/min por email |
+| `POST /register` | 3/min por IP |
+| `POST /refresh` | 10/min por IP |
+| Todas as rotas | 30/min por usuário ou IP |
 
 ---
 

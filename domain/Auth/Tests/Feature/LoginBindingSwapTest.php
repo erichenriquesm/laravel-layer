@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 use Domain\Auth\Contracts\LoginContract;
-use Domain\Auth\DTOs\AccessTokenDTO;
+use Domain\Auth\DTOs\TokenPairDTO;
 use Domain\Auth\DTOs\LoginDTO;
 use Mockery\MockInterface;
 
@@ -11,9 +11,9 @@ it('swaps the bound action for a hand written fake', function () {
     // Given
     $fake = new class implements LoginContract
     {
-        public function handle(LoginDTO $input): AccessTokenDTO
+        public function handle(LoginDTO $input): TokenPairDTO
         {
-            return new AccessTokenDTO(token: 'fake-token');
+            return new TokenPairDTO('fake-access', 'fake-refresh', 900, 'Bearer');
         }
     };
     $this->app->instance(LoginContract::class, $fake);
@@ -22,7 +22,7 @@ it('swaps the bound action for a hand written fake', function () {
     $response = $this->postJson('/login', ['email' => 'anyone@example.com', 'password' => 'whatever']);
 
     // Then
-    $response->assertStatus(200)->assertExactJson(['token' => 'fake-token']);
+    $response->assertStatus(200)->assertJson(['access_token' => 'fake-access', 'refresh_token' => 'fake-refresh']);
 });
 
 it('swaps the bound action for a mockery double and asserts the call', function () {
@@ -31,14 +31,14 @@ it('swaps the bound action for a mockery double and asserts the call', function 
         $mock->shouldReceive('handle')
             ->once()
             ->withArgs(fn (LoginDTO $dto) => $dto->email === 'anyone@example.com')
-            ->andReturn(new AccessTokenDTO(token: 'mocked-token'));
+            ->andReturn(new TokenPairDTO('mocked-access', 'mocked-refresh', 900, 'Bearer'));
     });
 
     // When
     $response = $this->postJson('/login', ['email' => 'anyone@example.com', 'password' => 'whatever']);
 
     // Then
-    $response->assertStatus(200)->assertExactJson(['token' => 'mocked-token']);
+    $response->assertStatus(200)->assertJson(['access_token' => 'mocked-access', 'refresh_token' => 'mocked-refresh']);
 });
 
 it('resolves the real action again once the swap is gone', function () {
