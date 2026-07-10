@@ -17,7 +17,7 @@ If the task touches application code, at least one applies. When in doubt, read 
 
 ```
 "add a /verify-email endpoint"   → domain-architecture, then domain-testing
-"why does /oauth/token 500?"     → domain-architecture (known issues)
+"why is this error not {code}?"  → domain-architecture (error handling)
 "the logout test is flaky"       → domain-testing (guard caching trap)
 ```
 
@@ -118,12 +118,8 @@ docker compose exec -T app php artisan test --filter="the guard's test"   # must
 ## Known issues (do not "fix" in passing without saying so)
 
 ```
-app/Console/Commands/Work.php:75   $res = '__delay__' is assignment, not comparison
-app/Console/Commands/Work.php:49   (int) $x ?? 0 never triggers the default
-/oauth/token                       returns INTERNAL_ERROR 500: Handler ignores $e->render()
-PassportSeeder                     seeds layer@gmail.com with a known password (123Mudar!)
-.env.example                       real APP_KEY committed; QUEUE_CONNECTION duplicated
-CACHE_DRIVER=file                  with >1 replica the rate limit becomes limit × replicas
-AUTH_PERSONAL_ACCESS_TOKEN_DAYS    dead config: no createToken() remains in the code
 Domain\Shared\Helpers\Queue        the most complex file in the repo, has no test
+PassportSeeder                     Str::random(40) in updateOrCreate rotates the client
+                                   secret on every re-seed (harmless today: read from DB
+                                   at runtime, not from .env)
 ```

@@ -176,7 +176,6 @@ Os tempos vivem em [`config/tokens.php`](config/tokens.php) e são lidos do `.en
 ```
 AUTH_ACCESS_TOKEN_MINUTES=15   # vida do access token
 AUTH_REFRESH_TOKEN_DAYS=14     # por quanto tempo o usuário fica logado sem digitar a senha
-AUTH_PERSONAL_ACCESS_TOKEN_DAYS=1
 ```
 
 Depois de mudar, rode `php artisan config:clear` (ou reinicie o container). Os valores são aplicados em `App\Providers\AuthServiceProvider`, e **tokens já emitidos mantêm a validade que tinham** — a mudança só afeta os próximos.

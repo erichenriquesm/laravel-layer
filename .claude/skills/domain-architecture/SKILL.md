@@ -113,7 +113,7 @@ enum AuthErrorCode: int
 
 ## Error-handling invariants (do not undo)
 
-The client only ever sees `publicMessage()`; the exception's own message never reaches the wire, so a wrong password and an unknown email are indistinguishable (no enumeration), and a 500 never echoes a query or an API key. The `Handler` must forward `HttpExceptionInterface` headers (the 429 carries `Retry-After` on itself) and must delegate to `$e->render($request)` when present, or Passport's `/oauth/*` errors become code 1000 with 500.
+The client only ever sees `publicMessage()`; the exception's own message never reaches the wire, so a wrong password and an unknown email are indistinguishable (no enumeration), and a 500 never echoes a query or an API key. The `Handler` forwards `HttpExceptionInterface` headers (the 429 carries `Retry-After` on itself) and delegates to `$e->render($request)` for Passport's `OAuthServerException`, so `/oauth/*` keep the RFC OAuth error shape instead of our envelope.
 
 ```php
 // Handler: delegate first, classify second.
@@ -217,11 +217,7 @@ curl -s -i -X POST http://localhost:81/login -H 'Accept: application/json' \
 These predate or are tracked separately; touching them silently hides them.
 
 ```
-app/Console/Commands/Work.php:75   $res = '__delay__' is assignment, not comparison
-app/Console/Commands/Work.php:49   (int) $x ?? 0 never triggers the default
-/oauth/token                       returns INTERNAL_ERROR 500: Handler ignores $e->render()
-PassportSeeder                     seeds layer@gmail.com with a known password (123Mudar!)
-.env.example                       real APP_KEY committed; QUEUE_CONNECTION duplicated
-CACHE_DRIVER=file                  with >1 replica the rate limit becomes limit × replicas
-AUTH_PERSONAL_ACCESS_TOKEN_DAYS    dead config: no createToken() remains in the code
+Domain\Shared\Helpers\Queue        the most complex file in the repo, has no test
+PassportSeeder                     Str::random(40) in updateOrCreate rotates the client
+                                   secret on every re-seed (harmless today: read from DB)
 ```
