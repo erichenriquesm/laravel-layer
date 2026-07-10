@@ -115,13 +115,11 @@ enum AuthErrorCode: int
 
 ## Error-handling invariants (do not undo)
 
-The client only ever sees `publicMessage()`; the exception's own message never reaches the wire, so a wrong password and an unknown email are indistinguishable (no enumeration), and a 500 never echoes a query or an API key. The `Handler` forwards `HttpExceptionInterface` headers (the 429 carries `Retry-After` on itself) and delegates to `$e->render($request)` for Passport's `OAuthServerException`, so `/oauth/*` keep the RFC OAuth error shape instead of our envelope.
+The client only ever sees `publicMessage()`; the exception's own message never reaches the wire, so a wrong password and an unknown email are indistinguishable (no enumeration), and a 500 never echoes a query or an API key. The `Handler` forwards `HttpExceptionInterface` headers (the 429 carries `Retry-After` on itself). Passport's `OAuthServerException` extends `HttpResponseException`, which the router renders natively before the `Handler` runs, so `/oauth/*` keep the RFC OAuth error shape without any special case here.
 
 ```php
-// Handler: delegate first, classify second.
-if (method_exists($e, 'render')) {
-    return $e->render($request);
-}
+// Handler: classify the exception, then build the {code, message} envelope.
+[$code, $status] = $this->classify($e);
 $headers = $e instanceof HttpExceptionInterface ? $e->getHeaders() : [];
 ```
 
