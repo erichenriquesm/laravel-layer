@@ -46,8 +46,8 @@ class Work extends Command
         $onerror = $this->option('onerror');
         $delay = $this->option('delay') ?? 0;
         $requeueMode = $this->option('requeueMode') ?? 'nack';
-        $maxWorkCount = (int) $this->option('maxWorkCount') ?? 0;
-        $requeueTime = (int) $this->option('requeueTime') ?? 60;
+        $maxWorkCount = (int) $this->option('maxWorkCount');
+        $requeueTime = (int) $this->option('requeueTime');
         $processesEachItem = $this->option('processesEachItem') ?? 0;
         $processEveryTime = $this->option('processEveryTime') ?? 0;
 
@@ -72,7 +72,7 @@ class Work extends Command
 
             try {
                 $res = Queue::processMessage($message, $delay);
-                if ($delay && is_string($res) && $res = '__delay__') {
+                if ($delay && is_string($res) && $res === '__delay__') {
                     sleep($requeueTime);
                     if ($requeueMode === 'requeue') {
                         Queue::directPublish($queue, $message);
