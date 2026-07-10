@@ -219,6 +219,8 @@ curl -s -i -X POST http://localhost:81/login -H 'Accept: application/json' \
 These predate or are tracked separately; touching them silently hides them.
 
 ```
-Domain\Shared\Queue\RabbitMqMessageQueue  the AMQP adapter has no test — it needs a live
-                                   broker. MessageDispatcher (the decode+invoke logic) is tested.
+(none outstanding)
+
+caveat: RabbitMqMessageQueueTest is an integration test against a real broker; it SKIPS when
+        RabbitMQ is unreachable, so a CI without a broker reports those as skipped, not passed.
 ```

@@ -118,6 +118,8 @@ docker compose exec -T app php artisan test --filter="the guard's test"   # must
 ## Known issues (do not "fix" in passing without saying so)
 
 ```
-Domain\Shared\Queue\RabbitMqMessageQueue  the AMQP adapter has no test — it needs a live
-                                   broker. MessageDispatcher (the decode+invoke logic) is tested.
+(none outstanding)
+
+caveat: RabbitMqMessageQueueTest is an integration test against a real broker; it SKIPS when
+        RabbitMQ is unreachable, so a CI without a broker reports those as skipped, not passed.
 ```

@@ -84,6 +84,19 @@ curl -s -i -X POST http://localhost:81/login -H 'Accept: application/json' \
 # check status, body, and Retry-After / X-RateLimit-* headers
 ```
 
+## Integration tests skip when their service is down, and must not hang
+
+An integration test against a real service (RabbitMqMessageQueueTest → the broker) tries to connect in `beforeEach` and `markTestSkipped` when it can't — so a CI without the service reports skipped, not failed. And it must never block forever: a blocking consume takes a `waitTimeout`, a `basic_get` polls with a deadline. A broken publish then fails in seconds, it does not hang the suite. (Learned the hard way — a mutation with no timeout hung the run.)
+
+```php
+try {
+    $this->connection = new AMQPStreamConnection($host, $port, $user, $pass, read_write_timeout: 5);
+} catch (\Throwable $e) {
+    $this->markTestSkipped('RabbitMQ is not reachable');
+}
+$adapter->consume($queue, $handler, waitTimeout: 5);   // bounded, never blocks forever
+```
+
 ## Trap: the guard caches the resolved user
 
 A test reuses one application across requests; production gets a fresh process per request. After revoking a token, call `forgetGuards()` before re-checking `/me`. Confirm in the DB before blaming the action.
