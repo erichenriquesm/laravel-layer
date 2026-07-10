@@ -36,9 +36,5 @@ class AuthServiceProvider extends ServiceProvider
         Passport::refreshTokensExpireIn(
             CarbonInterval::days(config('tokens.refresh_token_days'))
         );
-
-        Passport::personalAccessTokensExpireIn(
-            CarbonInterval::days(config('tokens.personal_access_token_days'))
-        );
     }
 }

@@ -2,11 +2,10 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
 use Illuminate\Database\Seeder;
-use Laravel\Passport\Client;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Laravel\Passport\Client;
 
 class PassportSeeder extends Seeder
 {
@@ -15,7 +14,6 @@ class PassportSeeder extends Seeder
      */
     public function run(): void
     {
-        # Criar ou atualizar Personal Access Client
         $personalClient = Client::updateOrCreate(
             ['personal_access_client' => true, 'password_client' => false],
             [
@@ -28,7 +26,7 @@ class PassportSeeder extends Seeder
             ]
         );
 
-        # Criar ou atualizar Password Grant Client
+        # The password grant needs this client; /login issues tokens through it.
         Client::updateOrCreate(
             ['password_client' => true, 'personal_access_client' => false],
             [
@@ -41,22 +39,14 @@ class PassportSeeder extends Seeder
             ]
         );
 
-        # Atualizar variáveis no .env (se necessário)
         DB::table('oauth_personal_access_clients')->updateOrInsert(
             ['client_id' => $personalClient->id],
             ['created_at' => now(), 'updated_at' => now()]
         );
 
-        # Cria ou atualiza usuário base
-        User::updateOrCreate(
-            ['email' => 'layer@gmail.com'],
-            [
-                'name' => 'Layer Project',
-                'email' => 'layer@gmail.com',
-                'password' => '$2y$12$IoAh36uDDlskW.d2MuCfZ.heoiaxhP7N5ljkwLQ6uulVNFikpPQrq'
-            ]
-        );
+        # No seeded user: register one through POST /register instead of shipping a
+        # known account. A hardcoded credential in a starter is a foothold in production.
 
-        $this->command->info('✅ Passport Clients e Personal Access configurados com sucesso!');
+        $this->command->info('Passport clients configured.');
     }
 }

@@ -20,6 +20,4 @@ return [
 
     'refresh_token_days' => (int) env('AUTH_REFRESH_TOKEN_DAYS', 14),
 
-    'personal_access_token_days' => (int) env('AUTH_PERSONAL_ACCESS_TOKEN_DAYS', 1),
-
 ];
