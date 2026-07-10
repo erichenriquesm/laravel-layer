@@ -9,6 +9,22 @@ use Domain\Shared\Exceptions\GeneralErrorCode;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
+it('lets Passport render its own OAuth error, not our envelope', function () {
+    // Given
+    // an invalid grant on Passport's own endpoint throws OAuthServerException
+    $payload = ['grant_type' => 'authorization_code'];
+
+    // When
+    $response = $this->postJson('/oauth/token', $payload);
+    $body = $response->json();
+
+    // Then
+    // the RFC-shaped OAuth error, not our {code, message} — reshaping it would break OAuth clients
+    expect($body)->toHaveKey('error');
+    expect($body)->not->toHaveKey('code');
+    expect($response->status())->not->toBe(500);
+});
+
 it('answers invalid credentials with the auth code', function () {
     // Given
     $payload = ['email' => 'nobody@example.com', 'password' => 'wrong-password'];

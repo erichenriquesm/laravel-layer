@@ -10,6 +10,8 @@ use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
+use Laravel\Passport\Exceptions\OAuthServerException;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -32,8 +34,14 @@ class Handler extends ExceptionHandler
      * Every error answers with the same shape, so a client can branch on `code` alone and
      * never has to parse a human message or guess from the status.
      */
-    public function render($request, Throwable $e): JsonResponse
+    public function render($request, Throwable $e): Response
     {
+        # Passport builds a spec-compliant OAuth error on itself (invalid_grant, etc). Reshaping
+        # /oauth/* into our {code, message} would break clients that expect the OAuth format.
+        if ($e instanceof OAuthServerException) {
+            return $e->render($request);
+        }
+
         [$code, $status] = $this->classify($e);
 
         $body = [
