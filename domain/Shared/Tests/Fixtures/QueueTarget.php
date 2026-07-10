@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Domain\Shared\Tests\Fixtures;
 
 /**
- * Target for Queue::processMessage tests: records how it was called so a test can tell a
+ * Target for MessageDispatcher tests: records how it was called so a test can tell a
  * static invocation from an instance one and inspect the args it received.
  */
 class QueueTarget

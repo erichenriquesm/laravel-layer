@@ -2,7 +2,8 @@
 
 namespace App\Console\Commands;
 
-use Domain\Shared\Helpers\Queue;
+use Domain\Shared\Queue\MessageDispatcher;
+use Domain\Shared\Queue\RabbitMqMessageQueue;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use PhpAmqpLib\Message\AMQPMessage;
@@ -21,11 +22,18 @@ class Work extends Command
      *
      * @var string
      */
-    protected $description = 'Comando responsável por consumir uma fila específica.';
+    protected $description = 'Consumes a specific queue.';
 
     private $workCount = 0;
 
     private $processesEachItemCount = 0;
+
+    public function __construct(
+        private readonly RabbitMqMessageQueue $queue,
+        private readonly MessageDispatcher $dispatcher,
+    ) {
+        parent::__construct();
+    }
 
     /**
      * Nth Fibonacci number via Binet's closed form, so no iteration is needed.
@@ -52,17 +60,17 @@ class Work extends Command
         $processEveryTime = $this->option('processEveryTime') ?? 0;
 
         if ($prefetch) {
-            Queue::setQos(0, $prefetch, false);
+            $this->queue->prefetch($prefetch);
         }
 
-        $consumerCount = Queue::getConsumerCount($queue);
+        $consumerCount = $this->queue->consumerCount($queue);
 
         # Spread the delay across concurrent consumers so they do not wake up in lockstep.
         if ($delay > 0 && $consumerCount > 0) {
             $delay = $delay + $this->getFib($consumerCount + 2);
         }
 
-        Queue::consume($queue, function (AMQPMessage $message) use ($queue, $assure, $onerror, $delay, $maxWorkCount, $requeueMode, $requeueTime, $processesEachItem, $processEveryTime) {
+        $this->queue->consume($queue, function (AMQPMessage $message) use ($queue, $assure, $onerror, $delay, $maxWorkCount, $requeueMode, $requeueTime, $processesEachItem, $processEveryTime) {
             if ($maxWorkCount) {
                 $this->workCount++;
                 if ($this->workCount > $maxWorkCount) {
@@ -71,27 +79,27 @@ class Work extends Command
             }
 
             try {
-                $res = Queue::processMessage($message, $delay);
-                if ($delay && is_string($res) && $res === '__delay__') {
+                $result = $this->dispatcher->dispatch($message->getBody(), $delay);
+                if ($result->notDue) {
                     sleep($requeueTime);
                     if ($requeueMode === 'requeue') {
-                        Queue::directPublish($queue, $message);
+                        $this->queue->republish($queue, $message);
                         $message->ack();
                     } else {
                         $message->nack(true);
                     }
                 } elseif ($assure) {
-                    if ($res) {
+                    if ($result->value) {
                         $message->ack();
                     } else {
                         Log::error('Worker -> assure -> requeuing', [
                             'queue' => $message->getRoutingKey(),
                             'message' => $message->getBody(),
-                            'res' => $res,
+                            'res' => $result->value,
                         ]);
                         sleep($requeueTime);
                         if ($requeueMode === 'requeue') {
-                            Queue::directPublish($queue, $message);
+                            $this->queue->republish($queue, $message);
                             $message->ack();
                         } else {
                             $message->nack(true);
@@ -118,7 +126,7 @@ class Work extends Command
                     $message->ack();
                 }
 
-                Queue::commit();
+                $this->queue->commit();
             } catch (\Throwable $th) {
                 if ($onerror === 'requeue') {
                     Log::error('Worker -> error -> requeuing', [
@@ -129,7 +137,7 @@ class Work extends Command
                     ]);
                     sleep($requeueTime);
                     if ($requeueMode === 'requeue') {
-                        Queue::directPublish($queue, $message);
+                        $this->queue->republish($queue, $message);
                         $message->ack();
                     } else {
                         $message->nack(true);
@@ -144,7 +152,7 @@ class Work extends Command
                     ]);
                     $message->ack();
                 }
-                Queue::commit();
+                $this->queue->commit();
             }
         });
     }
