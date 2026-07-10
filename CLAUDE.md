@@ -1,6 +1,6 @@
 # laravel-layer
 
-Laravel 10 + Passport starter with pragmatic hexagonal architecture (ports & adapters), `spatie/laravel-data` DTOs and Pest tests. Runs on Docker; the API answers at `http://localhost:81`.
+Laravel 12 + Passport 13 starter with pragmatic hexagonal architecture (ports & adapters), `spatie/laravel-data` DTOs and Pest tests. Runs on Docker; the API answers at `http://localhost:81`.
 
 ## Mandatory skills
 
