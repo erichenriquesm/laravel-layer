@@ -14,27 +14,25 @@ class PassportSeeder extends Seeder
      */
     public function run(): void
     {
-        $personalClient = Client::updateOrCreate(
+        # firstOrCreate, not updateOrCreate: a fresh Str::random(40) in the update values would
+        # rotate the client secret on every re-seed, invalidating whatever held the old one.
+        $personalClient = Client::firstOrCreate(
             ['personal_access_client' => true, 'password_client' => false],
             [
                 'name' => 'Personal Access Client',
                 'secret' => Str::random(40),
                 'redirect' => env('APP_URL', 'http://localhost'),
-                'personal_access_client' => true,
-                'password_client' => false,
                 'revoked' => false,
             ]
         );
 
         # The password grant needs this client; /login issues tokens through it.
-        Client::updateOrCreate(
+        Client::firstOrCreate(
             ['password_client' => true, 'personal_access_client' => false],
             [
                 'name' => 'Password Grant Client',
                 'secret' => Str::random(40),
                 'redirect' => env('APP_URL', 'http://localhost'),
-                'personal_access_client' => false,
-                'password_client' => true,
                 'revoked' => false,
             ]
         );
