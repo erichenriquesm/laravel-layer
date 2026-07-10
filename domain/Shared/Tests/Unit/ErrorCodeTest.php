@@ -10,7 +10,7 @@ function allErrorCodes(): array
     return array_merge(GeneralErrorCode::cases(), AuthErrorCode::cases());
 }
 
-it('never reuses a code across catalogues', function () {
+it('never reuses a number across catalogues', function () {
     // Given
     $codes = array_map(fn ($case) => $case->value, allErrorCodes());
 
@@ -21,37 +21,31 @@ it('never reuses a code across catalogues', function () {
     expect($duplicates)->toBe([]);
 });
 
-it('prefixes every auth code with AUTH_, so the owner is readable in a log line', function () {
+it('keeps every code inside the numeric range its catalogue owns', function () {
     // Given
-    $cases = AuthErrorCode::cases();
+    // general owns 1000-1099, auth owns 1100-1199
+
+    // When / Then
+    foreach (GeneralErrorCode::cases() as $case) {
+        expect($case->value)->toBeGreaterThanOrEqual(1000)->toBeLessThanOrEqual(1099);
+    }
+
+    foreach (AuthErrorCode::cases() as $case) {
+        expect($case->value)->toBeGreaterThanOrEqual(1100)->toBeLessThanOrEqual(1199);
+    }
+});
+
+it('exposes opaque numbers on the wire, never a semantic string', function () {
+    // Given
+    $cases = allErrorCodes();
 
     // When / Then
     foreach ($cases as $case) {
-        expect($case->value)->toStartWith('AUTH_');
+        expect($case->value)->toBeInt();
     }
 });
 
-it('leaves general codes unprefixed, since no domain owns them', function () {
-    // Given
-    $cases = GeneralErrorCode::cases();
-
-    // When / Then
-    foreach ($cases as $case) {
-        expect($case->value)->not->toContain('AUTH_');
-    }
-});
-
-it('keeps every code in SCREAMING_SNAKE_CASE', function () {
-    // Given
-    $codes = array_map(fn ($case) => $case->value, allErrorCodes());
-
-    // When / Then
-    foreach ($codes as $code) {
-        expect($code)->toMatch('/^[A-Z][A-Z0-9_]*$/');
-    }
-});
-
-it('describes every code, so the catalogue documents itself', function () {
+it('keeps a distinct internal description for every code', function () {
     // Given
     $cases = allErrorCodes();
 
@@ -63,14 +57,26 @@ it('describes every code, so the catalogue documents itself', function () {
     expect(count(array_unique($descriptions)))->toBe(count($cases));
 });
 
-it('does not tell a wrong password apart from an unknown email', function () {
+it('gives all auth codes the same generic public message, so the wire reveals nothing', function () {
     // Given
-    // both map to the same code on purpose: telling them apart enables email enumeration
+    // description() names the real failure; publicMessage() is what the client sees
+    $messages = array_map(fn (AuthErrorCode $case) => $case->publicMessage(), AuthErrorCode::cases());
 
     // When
-    $code = AuthErrorCode::InvalidCredentials;
+    $distinct = array_unique($messages);
 
     // Then
-    expect($code->value)->toBe('AUTH_INVALID_CREDENTIALS');
-    expect($code->description())->toBe('The email or the password is wrong');
+    expect($distinct)->toHaveCount(1);
+    expect($distinct[array_key_first($distinct)])->toBe('Authentication failed');
+});
+
+it('keeps the detailed meaning out of the public message', function () {
+    // Given
+    $case = AuthErrorCode::InvalidCredentials;
+
+    // When / Then
+    // the real reason lives only in description(), never in what the client receives
+    expect($case->description())->toBe('The email or the password is wrong');
+    expect($case->publicMessage())->not->toContain('email');
+    expect($case->publicMessage())->not->toContain('password');
 });

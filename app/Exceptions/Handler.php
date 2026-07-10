@@ -38,7 +38,7 @@ class Handler extends ExceptionHandler
 
         $body = [
             'code'    => $code,
-            'message' => $this->messageFor($e, $code),
+            'message' => $this->messageFor($code),
         ];
 
         if ($e instanceof ValidationException) {
@@ -60,7 +60,7 @@ class Handler extends ExceptionHandler
     }
 
     /**
-     * @return array{0: string, 1: int} the error code and the HTTP status
+     * @return array{0: int, 1: int} the error code and the HTTP status
      */
     private function classify(Throwable $e): array
     {
@@ -76,7 +76,7 @@ class Handler extends ExceptionHandler
         };
     }
 
-    private function codeForStatus(int $status): string
+    private function codeForStatus(int $status): int
     {
         return match ($status) {
             401 => AuthErrorCode::Unauthenticated->value,
@@ -88,22 +88,13 @@ class Handler extends ExceptionHandler
     }
 
     /**
-     * A 500 never echoes the exception message: it may carry a query, a path or a secret.
+     * The client only ever sees publicMessage(): a generic, safe text. The exception's own
+     * message (which may spell out the failure, a query or a secret) never reaches the wire.
      */
-    private function messageFor(Throwable $e, string $code): string
+    private function messageFor(int $code): string
     {
-        if ($code === GeneralErrorCode::InternalError->value) {
-            return GeneralErrorCode::InternalError->description();
-        }
-
-        $message = $e->getMessage();
-
-        if ($message !== '') {
-            return $message;
-        }
-
-        return AuthErrorCode::tryFrom($code)?->description()
-            ?? GeneralErrorCode::tryFrom($code)?->description()
-            ?? '';
+        return AuthErrorCode::tryFrom($code)?->publicMessage()
+            ?? GeneralErrorCode::tryFrom($code)?->publicMessage()
+            ?? GeneralErrorCode::InternalError->publicMessage();
     }
 }

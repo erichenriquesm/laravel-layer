@@ -31,7 +31,7 @@ it('answers an invalid refresh token with the auth code', function () {
     $response->assertStatus(401)->assertJson(['code' => AuthErrorCode::InvalidRefreshToken->value]);
 });
 
-it('answers a missing access token with the unauthenticated code and a message', function () {
+it('answers a missing access token with the unauthenticated code and a generic message', function () {
     // Given
     // no Authorization header
 
@@ -41,8 +41,44 @@ it('answers a missing access token with the unauthenticated code and a message',
     // Then
     $response->assertStatus(401)->assertJson([
         'code'    => AuthErrorCode::Unauthenticated->value,
-        'message' => 'Unauthenticated',
+        'message' => 'Authentication failed',
     ]);
+});
+
+it('never spells the failure out on the wire, so an attacker learns nothing from the message', function () {
+    // Given
+    // an invalid refresh token: its description names the exact state (expired / reused / invalid)
+    $payload = ['refresh_token' => 'not-a-real-refresh-token'];
+
+    // When
+    $response = $this->postJson('/refresh', $payload);
+    $body = $response->getContent();
+
+    // Then
+    $response->assertStatus(401)->assertJson([
+        'code'    => AuthErrorCode::InvalidRefreshToken->value,
+        'message' => 'Authentication failed',
+    ]);
+    expect($body)->not->toContain('refresh token');
+    expect($body)->not->toContain('expired');
+});
+
+it('serves the same generic message for every distinct auth failure', function () {
+    // Given
+    User::create([
+        'name'     => 'Jane Doe',
+        'email'    => 'same-message@example.com',
+        'password' => Hash::make('secret123'),
+    ]);
+
+    // When
+    $wrongPassword = $this->postJson('/login', ['email' => 'same-message@example.com', 'password' => 'nope']);
+    $unknownEmail = $this->postJson('/login', ['email' => 'ghost@example.com', 'password' => 'nope']);
+
+    // Then
+    // identical message and code for a wrong password and an unknown email: no enumeration
+    expect($wrongPassword->json('message'))->toBe($unknownEmail->json('message'));
+    expect($wrongPassword->json('code'))->toBe($unknownEmail->json('code'));
 });
 
 it('answers a validation failure with the general code and keeps the errors bag', function () {
@@ -110,7 +146,7 @@ it('never echoes the message of an unexpected exception, which may carry a secre
 
     // Then
     expect($response->getStatusCode())->toBe(500);
-    expect($body)->toContain(GeneralErrorCode::InternalError->value);
+    expect($body)->toContain((string) GeneralErrorCode::InternalError->value);
     expect($body)->not->toContain('sk_live_supersecret');
     expect($body)->not->toContain('SELECT');
 });

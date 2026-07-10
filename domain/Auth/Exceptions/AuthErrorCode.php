@@ -5,16 +5,18 @@ declare(strict_types=1);
 namespace Domain\Auth\Exceptions;
 
 /**
- * Codes owned by the Auth domain, all prefixed AUTH_.
+ * Codes owned by the Auth domain. Range 1100-1199.
  *
- * InvalidCredentials covers a missing user and a wrong password on purpose: telling them
- * apart would let an attacker enumerate which emails are registered.
+ * description() names the real failure, for logs and developers. publicMessage() is the
+ * only text a client sees, and it is deliberately generic: the three cases share one
+ * message so a raw response cannot tell an attacker which check failed, nor whether an
+ * email exists. A legitimate front maps the numeric code to its own UX copy.
  */
-enum AuthErrorCode: string
+enum AuthErrorCode: int
 {
-    case Unauthenticated = 'AUTH_UNAUTHENTICATED';
-    case InvalidCredentials = 'AUTH_INVALID_CREDENTIALS';
-    case InvalidRefreshToken = 'AUTH_INVALID_REFRESH_TOKEN';
+    case Unauthenticated = 1100;
+    case InvalidCredentials = 1101;
+    case InvalidRefreshToken = 1102;
 
     public function description(): string
     {
@@ -23,5 +25,10 @@ enum AuthErrorCode: string
             self::InvalidCredentials => 'The email or the password is wrong',
             self::InvalidRefreshToken => 'The refresh token is invalid, expired or already used',
         };
+    }
+
+    public function publicMessage(): string
+    {
+        return 'Authentication failed';
     }
 }

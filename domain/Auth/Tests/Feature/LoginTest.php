@@ -6,6 +6,7 @@ use App\Models\User;
 use Domain\Auth\Contracts\LoginContract;
 use Domain\Auth\DTOs\LoginDTO;
 use Domain\Auth\DTOs\TokenPairDTO;
+use Domain\Auth\Exceptions\AuthErrorCode;
 use Domain\Auth\Exceptions\InvalidCredentialsException;
 use Illuminate\Support\Facades\Hash;
 
@@ -99,7 +100,10 @@ it('responds 401 through the route when the credentials are invalid', function (
     $response = $this->postJson('/login', $payload);
 
     // Then
-    $response->assertStatus(401)->assertJson(['message' => 'Verify your credentials']);
+    $response->assertStatus(401)->assertJson([
+        'code'    => AuthErrorCode::InvalidCredentials->value,
+        'message' => 'Authentication failed',
+    ]);
 });
 
 it('responds 422 through the route when the credentials are missing', function () {

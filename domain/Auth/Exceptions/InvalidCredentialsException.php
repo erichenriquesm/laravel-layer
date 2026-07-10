@@ -14,7 +14,7 @@ final class InvalidCredentialsException extends RuntimeException implements HasE
         parent::__construct($message);
     }
 
-    public function errorCode(): string
+    public function errorCode(): int
     {
         return AuthErrorCode::InvalidCredentials->value;
     }

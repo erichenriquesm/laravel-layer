@@ -14,7 +14,7 @@ final class UnauthenticatedException extends RuntimeException implements HasErro
         parent::__construct($message);
     }
 
-    public function errorCode(): string
+    public function errorCode(): int
     {
         return AuthErrorCode::Unauthenticated->value;
     }

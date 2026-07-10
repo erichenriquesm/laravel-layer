@@ -9,6 +9,7 @@ use Domain\Auth\Contracts\RefreshTokenContract;
 use Domain\Auth\DTOs\LoginDTO;
 use Domain\Auth\DTOs\RefreshTokenDTO;
 use Domain\Auth\DTOs\TokenPairDTO;
+use Domain\Auth\Exceptions\AuthErrorCode;
 use Domain\Auth\Exceptions\InvalidRefreshTokenException;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Passport\Passport;
@@ -127,7 +128,10 @@ it('responds 401 through the route for an invalid refresh token', function () {
 
     // Then
     $response->assertStatus(401)
-        ->assertJson(['message' => 'The refresh token is invalid, expired or already used']);
+        ->assertJson([
+            'code'    => AuthErrorCode::InvalidRefreshToken->value,
+            'message' => 'Authentication failed',
+        ]);
 });
 
 it('responds 422 through the route when the refresh token is missing', function () {

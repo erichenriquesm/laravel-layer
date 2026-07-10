@@ -14,7 +14,7 @@ final class InvalidRefreshTokenException extends RuntimeException implements Has
         parent::__construct($message);
     }
 
-    public function errorCode(): string
+    public function errorCode(): int
     {
         return AuthErrorCode::InvalidRefreshToken->value;
     }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Models\User;
 use Domain\Auth\Contracts\LoginContract;
 use Domain\Auth\DTOs\LoginDTO;
+use Domain\Auth\Exceptions\AuthErrorCode;
 use Illuminate\Support\Facades\Hash;
 
 function tokenPairFor(string $email): Domain\Auth\DTOs\TokenPairDTO
@@ -95,5 +96,5 @@ it('answers 401 instead of crashing when the session carries no revocable token'
     $response = $this->postJson('/logout');
 
     // Then
-    $response->assertStatus(401)->assertJson(['code' => 'AUTH_UNAUTHENTICATED']);
+    $response->assertStatus(401)->assertJson(['code' => AuthErrorCode::Unauthenticated->value]);
 });
