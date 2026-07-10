@@ -9,7 +9,7 @@ Projeto base Laravel com **Docker**, **autenticação (Passport)**, **arquitetur
 - **DTOs**: `spatie/laravel-data` fazendo validação de entrada (no lugar de form requests) e serialização de saída (no lugar de resources)
 - **Testes**: Pest em `domain/<Domínio>/Tests/{Unit,Feature}`, escritos em Given/When/Then
 - **Dev**: Docker Compose, Makefile e scripts `.sh` para setup idempotente (incl. `passport:keys --force`)
-- **Filas**: containers **Redis** e **RabbitMQ**; comando `php artisan work {queue}` para processar filas; helper `Domain\Shared\Helpers\Queue` para publicar mensagens (classe + método + argumentos)
+- **Filas**: containers **Redis** e **RabbitMQ**; comando `php artisan work {queue}` para consumir; driven port `Domain\Shared\Contracts\MessageQueue` (adapter RabbitMQ) para publicar
 
 ---
 
@@ -222,23 +222,31 @@ docker compose exec app php artisan test --testsuite=Unit
 
 ## 📬 Filas: Redis + RabbitMQ
 
-O ambiente já inclui os containers **Redis** (porta 6379) e **RabbitMQ** (AMQP 5672, management 15672). As filas são processadas via RabbitMQ usando o helper `Domain\Shared\Helpers\Queue` e o comando `work`.
+O ambiente já inclui os containers **Redis** (porta 6379) e **RabbitMQ** (AMQP 5672, management 15672). A fila é o **único driven port** do projeto: o produtor depende da interface `Domain\Shared\Contracts\MessageQueue`, e o adapter `RabbitMqMessageQueue` fala com o broker. (A persistência segue Eloquent direto — a fila é a exceção deliberada, porque abstrair "enfileirar trabalho" evita que o produtor conheça o RabbitMQ.)
 
 ### Publicar mensagens
 
-Use `Queue::publish()` passando o nome da fila, a classe que será executada no consumer, o método e os argumentos:
+Injete o port `MessageQueue` e publique um `DeferredCall` — a chamada a executar depois no worker. Nada de `Queue::` estático; o produtor nunca nomeia o RabbitMQ.
 
 ```php
-use Domain\Shared\Helpers\Queue;
+use Domain\Shared\Contracts\MessageQueue;
+use Domain\Shared\Queue\DeferredCall;
 
-// Publica na fila "emails" para executar MailService::send($userId, $templateId)
-Queue::publish('emails', \App\Services\MailService::class, 'send', $userId, $templateId);
+final class ProductReport
+{
+    public function __construct(private readonly MessageQueue $queue) {}
 
-// Exemplo: processar pedido em background (o consumer chama ProcessOrder::run($orderId))
-Queue::publish('orders', \App\Services\ProcessOrder::class, 'run', $orderId);
+    public function schedule(int $productId): void
+    {
+        // enfileira ReportBuilder::build($productId) na fila "reports"
+        $this->queue->publish('reports', new DeferredCall(
+            ReportBuilder::class, 'build', [$productId],
+        ));
+    }
+}
 ```
 
-A mensagem será consumida pelo comando `work`, que deserializa e chama `$class::$method(...$args)` (ou instancia a classe e chama o método, se não for estático).
+O `MessageDispatcher` do worker decodifica o `DeferredCall` e chama `$class::$method(...$args)`. Alvos de método de instância são resolvidos **pelo container**, então podem declarar dependências no construtor — o container as injeta (um método estático é chamado direto, sem instância).
 
 ### Processar filas
 

@@ -9,7 +9,9 @@ Read this before touching `domain/` or `app/`. Every rule below has a consequenc
 
 ## Mental model: driver ports yes, driven ports no
 
-Hexagonal architecture applied only as far as it pays for itself. A **driver port** (input) is the interface the outside drives the app through — a use case; the app implements it. A **driven port** (output) is the interface the domain *owns and calls* to reach an external resource (DB, third-party HTTP, queue); an adapter implements it. Here every use case is an `Action` implementing a `Contract` (driver port), and callers depend on the contract. But actions talk to Eloquent, Passport and facades directly — no driven port, no repository, no persistence abstraction. Do not propose them. If persistence ever needed a driven port, the port would go in `Contracts/` and its adapter **inside the domain**, e.g. `domain/<Domain>/Repositories/`.
+Hexagonal architecture applied only as far as it pays for itself. A **driver port** (input) is the interface the outside drives the app through — a use case; the app implements it. A **driven port** (output) is the interface the domain *owns and calls* to reach an external resource; an adapter implements it. Here every use case is an `Action` implementing a `Contract` (driver port), and callers depend on the contract.
+
+Persistence stays Eloquent-direct — no repository, no driven port; do not propose one. The **one** driven port is the message queue: `Domain\Shared\Contracts\MessageQueue`, implemented by the `RabbitMqMessageQueue` adapter in `domain/Shared/Queue/`. Abstracting "enqueue work" is worth it (producers never name a broker); abstracting CRUD is not. A driven port's adapter lives **inside the domain**, next to the port — the queue adapter sits in `domain/Shared/Queue/`, not outside `domain/`.
 
 ```php
 // Caller depends on the contract, never on the concrete class.
@@ -34,7 +36,7 @@ domain/<Domain>/
 ├── Exceptions/  domain exceptions + the <Domain>ErrorCode enum
 ├── Providers/   one or more *ServiceProvider with the domain's public array $bindings
 ├── Support/     internal collaborators, no port (e.g. PassportTokenIssuer)
-├── Repositories/ driven-port adapters, only if persistence is ever abstracted (not used today)
+├── Queue/       the one driven-port adapter: RabbitMqMessageQueue + DeferredCall/dispatcher (Shared only)
 └── Tests/{Unit,Feature}/
 ```
 
@@ -217,7 +219,6 @@ curl -s -i -X POST http://localhost:81/login -H 'Accept: application/json' \
 These predate or are tracked separately; touching them silently hides them.
 
 ```
-Domain\Shared\Helpers\Queue        processMessage is tested; the AMQP-facing methods
-                                   (boot, publish, consume, declareQueue) still are not —
-                                   they need a live broker
+Domain\Shared\Queue\RabbitMqMessageQueue  the AMQP adapter has no test — it needs a live
+                                   broker. MessageDispatcher (the decode+invoke logic) is tested.
 ```
