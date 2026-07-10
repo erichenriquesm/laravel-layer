@@ -217,7 +217,9 @@ curl -s -i -X POST http://localhost:81/login -H 'Accept: application/json' \
 These predate or are tracked separately; touching them silently hides them.
 
 ```
-Domain\Shared\Helpers\Queue        the most complex file in the repo, has no test
+Domain\Shared\Helpers\Queue        processMessage is tested; the AMQP-facing methods
+                                   (boot, publish, consume, declareQueue) still are not —
+                                   they need a live broker
 PassportSeeder                     Str::random(40) in updateOrCreate rotates the client
                                    secret on every re-seed (harmless today: read from DB)
 ```
