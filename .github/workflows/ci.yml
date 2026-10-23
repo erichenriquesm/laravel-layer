@@ -34,6 +34,13 @@ jobs:
       - name: Wait for services
         run: sleep 10
 
+      # Garante que o PHP em uso tem o patch do PHP2Shell
+      - name: Check PHP version (PHP2Shell)
+        run: |
+          docker-compose exec -T app php -v
+          docker-compose exec -T app php -r 'exit(version_compare(PHP_VERSION, "8.2.35", ">=") ? 0 : 1);'
+          docker-compose exec -T app php -r 'exit(ini_get("session.upload_progress.enabled") ? 1 : 0);'
+
       # Executar os testes
       - name: Run tests
         run: |
