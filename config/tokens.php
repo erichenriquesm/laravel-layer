@@ -8,7 +8,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | Passport defaults every token to one year. These values are applied in
-    | App\Providers\AuthServiceProvider and drive the access token, the refresh
+    | Modules\Auth\Providers\AuthModuleServiceProvider and drive the access token, the refresh
     | token and the personal access token independently.
     |
     | A short access token limits the damage of a leak; the refresh token is
