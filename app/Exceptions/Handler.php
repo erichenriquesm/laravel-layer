@@ -2,14 +2,14 @@
 
 namespace App\Exceptions;
 
-use Domain\Auth\Exceptions\AuthErrorCode;
-use Domain\Shared\Contracts\HasErrorCode;
-use Domain\Shared\Exceptions\GeneralErrorCode;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
+use Modules\Auth\Exceptions\AuthErrorCode;
+use Modules\Shared\Contracts\HasErrorCode;
+use Modules\Shared\Exceptions\GeneralErrorCode;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;

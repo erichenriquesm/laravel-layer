@@ -8,17 +8,17 @@ These are not optional. Invoke them BEFORE writing code, not after.
 
 | Situation | Skill |
 |---|---|
-| Creating or changing anything under `domain/` or `app/` | `domain-architecture` |
-| Adding a domain, endpoint, action, DTO, exception or binding | `domain-architecture` |
-| Writing, changing or deleting any test | `domain-testing` |
-| Claiming a change works | `domain-testing` |
+| Creating or changing anything under `modules/` or `app/` | `module-architecture` |
+| Adding a module, endpoint, action, DTO, exception or binding | `module-architecture` |
+| Writing, changing or deleting any test | `module-testing` |
+| Claiming a change works | `module-testing` |
 
 If the task touches application code, at least one applies. When in doubt, read both.
 
 ```
-"add a /verify-email endpoint"   → domain-architecture, then domain-testing
-"why is this error not {code}?"  → domain-architecture (error handling)
-"the logout test is flaky"       → domain-testing (guard caching trap)
+"add a /verify-email endpoint"   → module-architecture, then module-testing
+"why is this error not {code}?"  → module-architecture (error handling)
+"the logout test is flaky"       → module-testing (guard caching trap)
 ```
 
 ## Driver ports yes, driven ports no
@@ -48,19 +48,19 @@ final class RegisterUserDTO extends Data {
 }
 ```
 
-## Bindings live in the domain
+## Modules own everything they need
 
-Each domain declares its bindings in its `Providers/` directory (`public array $bindings`); the glob discovers every `*ServiceProvider` there, so a domain may have more than one. Adding a domain never requires editing `app/`.
+Each module in `modules/` is a vertical slice: its controllers (`Http/Controllers`), middleware (`Http/Middleware`), routes (`Routes/`), models (`Models/`), bindings, rate limiters and event wiring all live inside it, registered by its `Providers/*ServiceProvider` (`public array $bindings` + `boot()`). The glob discovers every `*ServiceProvider` there, so a module may have more than one. Adding a module never requires editing `app/`, which keeps only framework glue (kernels, exception handler, base controller, generic middleware, the global rate limit).
 
 ```php
-class AuthDomainServiceProvider extends ServiceProvider {
+class AuthModuleServiceProvider extends ServiceProvider {
     public array $bindings = [LoginContract::class => Login::class];
 }
 ```
 
 ## The controller only translates HTTP
 
-One method = one action call. No `Auth::user()`, `App\Models\*`, `Laravel\Passport\*`, `instanceof` or business logic in the controller.
+One method = one action call. No `Auth::user()`, `Modules\*\Models\*`, `Laravel\Passport\*`, `instanceof` or business logic in the controller.
 
 ```php
 public function me(): UserDTO { return $this->getAuthenticatedUserAction->handle(); }
@@ -68,7 +68,7 @@ public function me(): UserDTO { return $this->getAuthenticatedUserAction->handle
 
 ## Every error carries an opaque numeric code
 
-Int enum per domain, in ranges (Auth 1100-1199, general 1000-1099). `description()` names the real failure for logs; `publicMessage()` is what the client gets, kept generic so a raw response never spells the failure out (all auth failures answer `Authentication failed`). The number is public contract; a front maps it to its own UX copy.
+Int enum per module, in ranges (Auth 1100-1199, general 1000-1099). `description()` names the real failure for logs; `publicMessage()` is what the client gets, kept generic so a raw response never spells the failure out (all auth failures answer `Authentication failed`). The number is public contract; a front maps it to its own UX copy.
 
 ```php
 // { "code": 1101, "message": "Authentication failed" }   // 1101 = AuthErrorCode::InvalidCredentials
@@ -91,9 +91,9 @@ class RegisterUser implements RegisterUserContract {}   // right
 class CadastrarUsuario implements CadastrarUsuarioContract {}   // wrong, whatever the prompt's language
 ```
 
-## Tests live in the domain
+## Tests live in the module
 
-`domain/<X>/Tests/{Unit,Feature}`, Pest, Given/When/Then, English, grouped by use case, not by layer.
+`modules/<X>/Tests/{Unit,Feature}`, Pest, Given/When/Then, English, grouped by use case, not by layer.
 
 ```php
 it('logs in through the route and responds 200 with the token pair', function () { /* ... */ });

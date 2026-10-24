@@ -5,9 +5,9 @@ Projeto base Laravel com **Docker**, **autenticação (Passport)**, **arquitetur
 ### O que já vem
 
 - **Auth**: registro, login e rota `/me` com Laravel Passport
-- **Estrutura**: um diretório por domínio em `domain/`, com actions, contracts (ports), DTOs, provider e testes próprios
+- **Estrutura**: um diretório por módulo em `modules/`, com controllers, rotas, models, actions, contracts (ports), DTOs, provider e testes próprios
 - **DTOs**: `spatie/laravel-data` fazendo validação de entrada (no lugar de form requests) e serialização de saída (no lugar de resources)
-- **Testes**: Pest em `domain/<Domínio>/Tests/{Unit,Feature}`, escritos em Given/When/Then
+- **Testes**: Pest em `modules/<Módulo>/Tests/{Unit,Feature}`, escritos em Given/When/Then
 - **Dev**: Docker Compose, Makefile e scripts `.sh` para setup idempotente (incl. `passport:keys --force`)
 - **Filas**: containers **Redis** e **RabbitMQ**; trabalho em background por **evento de domínio + listener `ShouldQueue`** na conexão `rabbitmq`, processado por `php artisan queue:work rabbitmq` (a regra não conhece a fila)
 
@@ -15,19 +15,29 @@ Projeto base Laravel com **Docker**, **autenticação (Passport)**, **arquitetur
 
 ## 🧩 Arquitetura: ports & adapters, de forma pragmática
 
-A ideia central da arquitetura hexagonal é que a regra de negócio não conheça o mundo externo. Quem chama de fora entra por um **driver port** (porta de entrada), uma interface que a aplicação implementa. Quando a regra de negócio precisa alcançar um recurso externo — banco, HTTP de terceiro, fila —, ela o enxerga através de um **driven port** (porta de saída): uma interface que o próprio domínio define e chama, e que um **adapter** implementa. Aqui essa ideia é aplicada **até onde ela paga o próprio custo** — e o README é explícito sobre onde ela para.
+A ideia central da arquitetura hexagonal é que a regra de negócio não conheça o mundo externo. Quem chama de fora entra por um **driver port** (porta de entrada), uma interface que a aplicação implementa. Quando a regra de negócio precisa alcançar um recurso externo — banco, HTTP de terceiro, fila —, ela o enxerga através de um **driven port** (porta de saída): uma interface que o próprio módulo define e chama, e que um **adapter** implementa. Aqui essa ideia é aplicada **até onde ela paga o próprio custo** — e o README é explícito sobre onde ela para.
+
+### Módulos
+
+Cada pasta em `modules/` é uma fatia vertical de uma área do negócio — `Auth`, `Billing` — com tudo o que ela precisa: controllers, middleware, rotas, models, casos de uso, DTOs, exceções, eventos, provider e testes. O `app/` guarda só a cola do framework: kernels, `Handler` de exceções, controller base, middlewares genéricos e o rate limit global. `Shared/` guarda só o que é comum a todos (contratos e códigos de erro gerais).
+
+O nome é `modules/`, e não `domain/` ou `contexts/`, de propósito: cada pasta atravessa todas as camadas (aplicação, domínio e alguns adapters), e o projeto não modela bounded contexts no sentido do DDD estratégico. "Módulo" descreve o que existe sem prometer mais do que isso. Se um módulo ganhar entities ou value objects, eles ficam dentro dele (`modules/<Módulo>/ValueObjects/`), não numa camada separada.
 
 ### O que existe: driver ports
 
 Cada caso de uso é uma **action** que implementa um **contract**. O contract é o driver port: é ele, e não a classe concreta, que o mundo externo enxerga.
 
 ```
-domain/Auth/
+modules/Auth/
 ├── Contracts/           ← driver ports (LoginContract, RegisterUserContract)
 ├── Actions/             ← implementações (Login, RegisterUser)
 ├── DTOs/                ← entrada e saída (LoginDTO, TokenPairDTO, UserDTO…)
-├── Exceptions/          ← exceções de domínio (InvalidCredentialsException)
-├── Providers/           ← um ou mais ServiceProviders com os bindings do domínio
+├── Exceptions/          ← exceções do módulo (InvalidCredentialsException)
+├── Events/ Listeners/   ← fatos do domínio e reações em fila (UserRegistered)
+├── Http/                ← Controllers/ (AuthController) e Middleware/ (AuthMiddleware)
+├── Models/              ← models Eloquent do módulo (User)
+├── Routes/              ← rotas do módulo (auth.php)
+├── Providers/           ← ServiceProviders: bindings, rotas, middleware, rate limits, eventos
 └── Tests/{Unit,Feature}
 ```
 
@@ -52,16 +62,16 @@ $this->mock(LoginContract::class, function (MockInterface $mock) {
 
 **As actions usam Eloquent, `Auth::attempt()` e o Passport diretamente.** Não há `UserRepositoryContract`, nem repositórios, nem abstração de persistência. O trabalho em background também não passa por um port: a action levanta um evento de domínio e um listener `ShouldQueue` reage — a regra anuncia um fato, não comanda a fila.
 
-Isso é uma escolha, não um esquecimento. O preço de um driven port de banco em CRUD é alto — some a expressividade do query builder, aparecem DTOs de credencial, hasher e emissor de token — e o retorno (trocar o banco, testar sem ele) raramente se realiza. O trade-off aceito é: **queries simples, domínio que precisa de banco para ser testado.** Por isso os testes de action ficam em `Tests/Feature`, não em `Tests/Unit`.
+Isso é uma escolha, não um esquecimento. O preço de um driven port de banco em CRUD é alto — some a expressividade do query builder, aparecem DTOs de credencial, hasher e emissor de token — e o retorno (trocar o banco, testar sem ele) raramente se realiza. O trade-off aceito é: **queries simples, regra de negócio que precisa de banco para ser testada.** Por isso os testes de action ficam em `Tests/Feature`, não em `Tests/Unit`.
 
-Se um dia a persistência precisar ser abstraída, o caminho é declarar o driven port em `domain/<Domínio>/Contracts/` e implementá-lo com um adapter **dentro do próprio domínio** — por exemplo em `domain/<Domínio>/Repositories/`. A action passa a depender do port, não do Eloquent.
+Se um dia a persistência precisar ser abstraída, o caminho é declarar o driven port em `modules/<Módulo>/Contracts/` e implementá-lo com um adapter **dentro do próprio módulo** — por exemplo em `modules/<Módulo>/Repositories/`. A action passa a depender do port, não do Eloquent.
 
-### Bindings: no provider do domínio
+### Bindings: no provider do módulo
 
-Não existe arquivo central de bindings. Cada domínio declara os seus no seu diretório `Providers/`, usando o array `$bindings` nativo do Laravel:
+Não existe arquivo central de bindings. Cada módulo declara os seus no seu diretório `Providers/`, usando o array `$bindings` nativo do Laravel:
 
 ```php
-class AuthDomainServiceProvider extends ServiceProvider
+class AuthModuleServiceProvider extends ServiceProvider
 {
     public array $bindings = [
         LoginContract::class        => Login::class,
@@ -70,18 +80,22 @@ class AuthDomainServiceProvider extends ServiceProvider
 }
 ```
 
-O `App\Providers\DomainServiceProvider` descobre por convenção qualquer `*ServiceProvider` em `domain/*/Providers/` e o registra — um domínio pode ter mais de um. **Adicionar um domínio não exige editar nada dentro de `app/`.**
+O `boot()` do mesmo provider carrega as rotas do módulo, registra o alias de middleware, os rate limiters e o mapeamento evento→listener.
 
-### Criando um novo domínio
+O `App\Providers\ModuleServiceProvider` descobre por convenção qualquer `*ServiceProvider` em `modules/*/Providers/` e o registra — um módulo pode ter mais de um. **Adicionar um módulo não exige editar nada dentro de `app/`.**
 
-Copie `domain/Auth` como molde:
+### Criando um novo módulo
+
+Copie `modules/Auth` como molde:
 
 ```
-domain/Billing/
+modules/Billing/
 ├── Contracts/BillingContract.php               ← interface com handle(BillingDTO): SomeDTO
 ├── Actions/Billing.php                         ← implements BillingContract
 ├── DTOs/BillingDTO.php                         ← extends Spatie\LaravelData\Data
-├── Providers/BillingDomainServiceProvider.php  ← public array $bindings = [...]
+├── Http/Controllers/BillingController.php      ← um método = uma chamada de action
+├── Routes/billing.php                          ← carregado no boot() do provider
+├── Providers/BillingModuleServiceProvider.php  ← public array $bindings = [...]
 └── Tests/{Unit,Feature}/
 ```
 
@@ -126,7 +140,7 @@ Só o `422` acrescenta um campo, `errors`, com a lista de campos inválidos.
 
 Repare que `1100` e `1102` são ambos `401` e pedem reações **opostas**: o primeiro manda renovar, o segundo manda deslogar. É exatamente por isso que o código existe separado do status. Os três `401` de autenticação compartilham a **mesma** `message` — só o número os distingue, e só quem tem o catálogo o interpreta.
 
-Os catálogos são enums `int`: `Domain\Auth\Exceptions\AuthErrorCode` (faixa 1100-1199) e `Domain\Shared\Exceptions\GeneralErrorCode` (1000-1099). Cada caso tem `description()` (o significado real, para log) e `publicMessage()` (o texto seguro que vai ao cliente). Um domínio novo declara o seu próprio enum na sua faixa, e uma exceção entra no contrato implementando `Domain\Shared\Contracts\HasErrorCode`.
+Os catálogos são enums `int`: `Modules\Auth\Exceptions\AuthErrorCode` (faixa 1100-1199) e `Modules\Shared\Exceptions\GeneralErrorCode` (1000-1099). Cada caso tem `description()` (o significado real, para log) e `publicMessage()` (o texto seguro que vai ao cliente). Um módulo novo declara o seu próprio enum na sua faixa, e uma exceção entra no contrato implementando `Modules\Shared\Contracts\HasErrorCode`.
 
 Cuidados embutidos no `Handler`:
 
@@ -136,7 +150,7 @@ Cuidados embutidos no `Handler`:
 
 ## 🔑 Tokens: expiração, rotação e logout
 
-O `/login` usa o **password grant** do Passport (habilitado em `AuthServiceProvider`, já que o Passport 11+ o desliga por padrão). O `client_id` e o `client_secret` do password grant client ficam no servidor — o cliente da API nunca os vê.
+O `/login` usa o **password grant** do Passport (habilitado em `AuthModuleServiceProvider`, já que o Passport 11+ o desliga por padrão). O `client_id` e o `client_secret` do password grant client ficam no servidor — o cliente da API nunca os vê.
 
 Há dois tokens, com propósitos diferentes. O **access token** é curto e viaja em toda requisição. O **refresh token** é longo, fica guardado e só é usado para obter um access token novo. A ideia é que o token exposto o tempo todo valha pouco tempo.
 
@@ -178,7 +192,7 @@ AUTH_ACCESS_TOKEN_MINUTES=15   # vida do access token
 AUTH_REFRESH_TOKEN_DAYS=14     # por quanto tempo o usuário fica logado sem digitar a senha
 ```
 
-Depois de mudar, rode `php artisan config:clear` (ou reinicie o container). Os valores são aplicados em `App\Providers\AuthServiceProvider`, e **tokens já emitidos mantêm a validade que tinham** — a mudança só afeta os próximos.
+Depois de mudar, rode `php artisan config:clear` (ou reinicie o container). Os valores são aplicados em `Modules\Auth\Providers\AuthModuleServiceProvider`, e **tokens já emitidos mantêm a validade que tinham** — a mudança só afeta os próximos.
 
 Ao escolher os números, o trade-off é este: encurtar o access token reduz a janela em que um token vazado é útil, ao custo de mais chamadas ao `/refresh`. Encurtar o refresh token força o usuário a digitar a senha com mais frequência.
 
@@ -208,7 +222,7 @@ cp .env.example .env
 make setup
 ```
 
-Depois disso, a API estará no ar (rotas em `routes/auth.php`).
+Depois disso, a API estará no ar (rotas de auth em `modules/Auth/Routes/auth.php`).
 
 ```bash
 # Todos os testes
@@ -226,19 +240,19 @@ O ambiente já inclui os containers **Redis** (porta 6379) e **RabbitMQ** (AMQP 
 
 ### Levantar um fato
 
-A action injeta `Illuminate\Contracts\Events\Dispatcher` e dispara o evento — nunca um Job, nunca a fila. `Domain\Auth` é o exemplo real (`RegisterUser` → `UserRegistered` → `SendWelcomeNotification`):
+A action injeta `Illuminate\Contracts\Events\Dispatcher` e dispara o evento — nunca um Job, nunca a fila. `Modules\Auth` é o exemplo real (`RegisterUser` → `UserRegistered` → `SendWelcomeNotification`):
 
 ```php
-use Domain\Auth\Events\UserRegistered;
+use Modules\Auth\Events\UserRegistered;
 
 // dentro da action, depois de criar o usuário:
 $this->events->dispatch(new UserRegistered($user->id));
 ```
 
-O mapeamento evento→listener vive no provider do próprio domínio (nada em `app/`):
+O mapeamento evento→listener vive no provider do próprio módulo (nada em `app/`):
 
 ```php
-// AuthDomainServiceProvider::boot()
+// AuthModuleServiceProvider::boot()
 Event::listen(UserRegistered::class, SendWelcomeNotification::class);
 ```
 
