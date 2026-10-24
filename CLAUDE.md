@@ -115,6 +115,14 @@ Three rules learned the hard way here: a green suite does not prove a test detec
 docker compose exec -T app php artisan test --filter="the guard's test"   # must be ⨯
 ```
 
+## Production image
+
+`Dockerfile` target `production` is one image (nginx + PHP-FPM, port 8080) run by an orchestrator, never by docker-compose; `development` is what compose uses. Its invariants, each covered by the CI smoke test: no `.env` or keys in the image (`.dockerignore`), secrets and Passport keys come from env vars, caches are built by `docker/production/entrypoint.sh` at start (not at build, and not `artisan optimize`: there is no `resources/views`), logs go to stdout/stderr, SIGTERM exits 0 after draining, and either process dying stops the container.
+
+```bash
+docker build --target production -t laravel-layer . && docker run -p 8080:8080 -e APP_KEY=... -e PASSPORT_PRIVATE_KEY=... laravel-layer
+```
+
 ## Known issues (do not "fix" in passing without saying so)
 
 ```

@@ -51,3 +51,40 @@ jobs:
         if: always()
         run: |
           docker-compose down
+
+  production_image:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Builda o stage que vai para produção (ECS)
+      - name: Build production image
+        run: docker build --target production -t laravel-layer:ci .
+
+      # Sobe a imagem só com variáveis de ambiente, como o orquestrador faria, e testa o HTTP
+      - name: Smoke test
+        run: |
+          openssl genrsa -out /tmp/oauth-private.key 2048
+          openssl rsa -in /tmp/oauth-private.key -pubout -out /tmp/oauth-public.key
+          docker run -d --name app -p 8080:8080 \
+            -e APP_KEY="base64:$(openssl rand -base64 32)" \
+            -e PASSPORT_PRIVATE_KEY="$(cat /tmp/oauth-private.key)" \
+            -e PASSPORT_PUBLIC_KEY="$(cat /tmp/oauth-public.key)" \
+            laravel-layer:ci
+          for i in $(seq 1 30); do curl -fs localhost:8080/health && break; sleep 1; done
+          test "$(curl -s localhost:8080/health)" = "pong"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST localhost:8080/login -H 'Accept: application/json')" = "422"
+          docker exec app php -r 'exit(version_compare(PHP_VERSION, "8.2.35", ">=") ? 0 : 1);'
+          test "$(docker exec app php -r 'echo ini_get("opcache.validate_timestamps");')" = "0"
+
+      # Desligamento gracioso: SIGTERM deve encerrar com código 0
+      - name: Graceful stop
+        run: |
+          docker stop app
+          test "$(docker inspect app --format '{{.State.ExitCode}}')" = "0"
+
+      - name: Container logs
+        if: always()
+        run: docker logs app || true

@@ -312,6 +312,61 @@ Com **systemd**, crie um unit que execute `php artisan queue:work rabbitmq` e us
 
 ---
 
+## 🚢 Produção (ECS, Kubernetes ou outro orquestrador)
+
+O `Dockerfile` tem dois alvos. O `development` é o que o `docker-compose` usa localmente (só PHP-FPM, código montado por volume, nginx em outro container). O `production` é uma **imagem única** com nginx + PHP-FPM e o código dentro, pronta para rodar sozinha:
+
+```bash
+docker build --target production -t laravel-layer .
+```
+
+| | |
+|---|---|
+| Porta | `8080` (HTTP). O FPM escuta só em `127.0.0.1:9000`, dentro do container |
+| Health check | `GET /health` → `200 pong`. Checa nginx e FPM sem subir o Laravel |
+| Logs | tudo em stdout/stderr (acesso do nginx, erros do PHP, `LOG_CHANNEL=stderr`) |
+| Parada | `SIGTERM` → nginx para de aceitar e termina as requisições em voo, depois o FPM. Sai com `0` |
+| Falha | se o nginx ou o FPM morrer, o container sai com erro e o orquestrador repõe a task |
+
+### Variáveis de ambiente
+
+Não existe `.env` na imagem (o `.dockerignore` barra). Tudo vem da task definition, com os segredos no Secrets Manager/SSM:
+
+| Variável | Obrigatória | Observação |
+|---|---|---|
+| `APP_KEY` | sim | `php artisan key:generate --show` |
+| `PASSPORT_PRIVATE_KEY` / `PASSPORT_PUBLIC_KEY` | sim | conteúdo das chaves (não o caminho). **As mesmas em todas as tasks**, senão um token emitido por uma é recusado pela outra |
+| `PASSPORT_PASSWORD_CLIENT_SECRET` | sim | o mesmo usado no `PassportSeeder` |
+| `DB_*`, `REDIS_*`, `RABBITMQ_*`, `CACHE_DRIVER`, `QUEUE_CONNECTION` | sim | como no `.env.example` |
+| `PHP_FPM_PM_MAX_CHILDREN` | não | padrão `12`, pensado para 1 GB de memória (~60 MB por worker). Ajuste junto com a memória da task |
+| `PHP_FPM_REQUEST_TERMINATE_TIMEOUT` | não | padrão `60s`, alinhado ao idle timeout do ALB |
+
+Os caches de config, rotas e eventos são gerados **na subida do container**, não no build, porque o ambiente só existe nessa hora.
+
+### Um serviço, três usos
+
+A mesma imagem roda qualquer comando no lugar do servidor web:
+
+```bash
+# web (padrão)
+docker run laravel-layer
+
+# worker da fila: um serviço ECS separado, com outro command
+docker run laravel-layer php artisan queue:work rabbitmq --tries=3
+
+# migrações: task avulsa no deploy, antes de trocar o serviço web
+docker run laravel-layer php artisan migrate --force
+```
+
+### Na task definition (ECS)
+
+- `portMappings`: `8080`, e o target group do ALB aponta para ela com health check em `/health`.
+- `healthCheck` do container: `["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health || exit 1"]` (o `HEALTHCHECK` do Dockerfile é ignorado pelo ECS).
+- `stopTimeout`: maior que a requisição mais longa (ex.: `30`).
+- Atrás do ALB, o nginx recupera o IP real do cliente pelo `X-Forwarded-For` (só confia em IPs privados) e repassa o HTTPS para o PHP. Por isso os rate limits por IP valem por cliente, e não para o load balancer inteiro.
+
+---
+
 # 🛠️ Setup do Projeto com Docker
 
 Este projeto utiliza **Docker** para configurar e gerenciar o ambiente de desenvolvimento.  
